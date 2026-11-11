@@ -1,0 +1,192 @@
+@import "tailwindcss";
+
+/*
+  Screening Room design tokens. Dark only.
+  Near-black canvas, high-contrast white text, and one restrained accent
+  (tungsten) used only for state: live, selected, in progress, focus, and the
+  single primary action on a screen. See design-system/screening-room/MASTER.md.
+*/
+@theme {
+  /* Surfaces, darkest to lightest. Depth comes from steps, not shadows. */
+  --color-canvas: #0a0a0b;       /* page background */
+  --color-surface: #141416;      /* hover rows, panels, skeletons */
+  --color-raised: #1c1c1f;       /* inputs, image wells, chips */
+  --color-line: #26262a;         /* hairline borders */
+  --color-line-strong: #34343a;  /* borders on hover/focus-within */
+
+  /* Text. Contrast on canvas: fg 18:1, muted 8.2:1, faint 4.9:1. */
+  --color-fg: #f4f4f5;
+  --color-fg-muted: #a6a6ae;
+  --color-fg-faint: #7d7d86;     /* canvas and surface only (4.5:1+), never on raised */
+
+  /* The one accent. 9.5:1 on canvas. */
+  --color-accent: #eaa64a;
+  --color-accent-soft: #eaa64a24;
+  --color-on-accent: #140c02;
+
+  /* Chart series (single series). Deeper than the UI accent so it passes the
+     dark-mode lightness band (dataviz validator: all checks pass on canvas). */
+  --color-chart: #bf8329;
+
+  --color-danger: #f2786b;
+  --color-scrim: #000000cc;      /* badges over imagery */
+
+  /* Space Grotesk: display voice, held in reserve. Inter Tight: the dense
+     interface. Space Mono: durations and counts as a timecode readout. */
+  --font-sans: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
+  --font-grotesk: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-space-mono), ui-monospace, monospace;
+
+  /* Radius follows hierarchy. Buttons and the search-style input are pills. */
+  --radius-thumb: 10px;
+  --radius-control: 8px;
+  --radius-chip: 4px;
+  --radius-pill: 9999px;
+
+  /* Grid rhythm (4px base). */
+  --grid-gap-x: 16px;
+  --grid-gap-y: 36px;
+}
+
+/* Page and section titles in the display voice. */
+@utility font-display {
+  font-family: var(--font-grotesk);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+/* Type scale. Sizes in px / line-height. */
+@utility type-display-xl { font-family: var(--font-grotesk); font-size: 56px; line-height: 0.98; font-weight: 700; letter-spacing: -0.03em; }
+@utility type-display { font-family: var(--font-grotesk); font-size: 30px; line-height: 1.1; font-weight: 500; letter-spacing: -0.02em; }
+@utility type-heading { font-size: 20px; line-height: 26px; font-weight: 600; letter-spacing: -0.012em; }
+@utility type-title { font-size: 14px; line-height: 19px; font-weight: 500; letter-spacing: -0.006em; }
+@utility type-body { font-size: 15px; line-height: 22px; font-weight: 400; letter-spacing: -0.003em; }
+@utility type-meta { font-size: 13px; line-height: 18px; font-weight: 400; font-variant-numeric: tabular-nums; }
+@utility type-label { font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+@utility type-timecode { font-family: var(--font-mono); font-size: 12px; line-height: 16px; font-weight: 400; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+
+/* Card playhead: watch progress when known, a scrub nudge on hover otherwise. */
+@utility playhead {
+  position: absolute;
+  inset-inline-start: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--color-accent);
+  box-shadow: 0 0 10px 1px #eaa64a80;
+  transition: width 320ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  background: var(--color-canvas);
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-control);
+}
+
+/* Layout -------------------------------------------------------------------- */
+
+/*
+  Feed rhythm: columns step 1 → 6; cards never get wider than ~340px or
+  narrower than ~240px past the 2-column step. Row gap is larger than the
+  column gap so each title block reads with its own thumbnail.
+*/
+.video-grid {
+  display: grid;
+  column-gap: var(--grid-gap-x);
+  row-gap: var(--grid-gap-y);
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+@media (min-width: 520px) { .video-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 840px) { .video-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1120px) { .video-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 1440px) { .video-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (min-width: 1800px) { .video-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+
+/* Page gutters: 16 → 24 → 32px; content caps at 2048px. */
+.page {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 2048px;
+  padding-inline: 16px;
+}
+@media (min-width: 640px) { .page { padding-inline: 24px; } }
+@media (min-width: 1440px) { .page { padding-inline: 32px; } }
+
+.watch-layout {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 1024px) {
+  .watch-layout { grid-template-columns: minmax(0, 1fr) 360px; gap: 28px; }
+}
+@media (min-width: 1440px) {
+  .watch-layout { grid-template-columns: minmax(0, 1fr) 400px; }
+}
+
+/* ImageKit player (Video.js) theme ------------------------------------------ */
+
+.sr-player .video-js {
+  font-family: var(--font-sans);
+  background: #000;
+}
+.sr-player .video-js .vjs-control-bar {
+  background: linear-gradient(to top, rgb(22 20 28 / 0.92), rgb(22 20 28 / 0));
+}
+.sr-player .video-js .vjs-play-progress,
+.sr-player .video-js .vjs-volume-level {
+  background-color: var(--color-accent);
+}
+.sr-player .video-js .vjs-load-progress div,
+.sr-player .video-js .vjs-load-progress {
+  background: rgb(236 230 218 / 0.25);
+}
+.sr-player .video-js .vjs-slider {
+  background-color: rgb(236 230 218 / 0.15);
+}
+.sr-player .video-js .vjs-big-play-button {
+  border: 0;
+  border-radius: 9999px;
+  width: 72px;
+  height: 72px;
+  line-height: 72px;
+  margin-left: -36px;
+  margin-top: -36px;
+  background-color: rgb(22 20 28 / 0.72);
+}
+.sr-player .video-js:hover .vjs-big-play-button,
+.sr-player .video-js .vjs-big-play-button:focus {
+  background-color: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
