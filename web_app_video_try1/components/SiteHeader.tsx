@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { getViewer } from "@/lib/auth";
 import { buttonClass } from "@/components/ui";
+import { InstallAppButton } from "./InstallAppButton";
 
 const navLink =
   "rounded-[var(--radius-control)] px-3 py-2 text-fg-muted transition-colors hover:text-fg";
@@ -18,6 +19,7 @@ export function SiteHeader() {
         </Link>
 
         <div className="flex items-center gap-1 text-sm">
+          <InstallAppButton />
           <Suspense fallback={<span className="ml-1 inline-block h-8 w-[72px]" aria-hidden />}>
             <AccountNav />
           </Suspense>

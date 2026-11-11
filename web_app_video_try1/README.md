@@ -26,6 +26,7 @@ We build no video infrastructure ourselves. ImageKit stores the videos, streams 
 - **History:** videos you've watched, grouped by day.
 - **Members-only videos:** these show a lock. Only members (and the owner) can play them; everyone else sees a sign-in or members gate.
 - **Sign in** with a password, or with a one-time link sent by email.
+- **Install as an app:** press **Install app** (next to your account in the top bar) to put Screening Room on your phone's home screen. It opens full screen, straight into the app. On iPhone the button shows the two Safari steps; on Android and desktop Chrome/Edge it opens the install prompt (needs HTTPS, see Notes).
 
 ### As a creator (Studio)
 - **Upload:** drag and drop several videos at once, with progress bars, cancel and retry. Uploads go straight to ImageKit and start as unpublished drafts.
@@ -114,4 +115,5 @@ plan.md              milestone plan and change log
 ## Notes
 - **Browser support:** use Chrome, Edge or Safari. VS Code's built-in preview browser can't decode H.264 video.
 - **Sign-in emails:** Supabase's built-in sender allows only about 2 emails per hour. Use password sign-in, or connect your own SMTP sender in Supabase (Authentication → Emails).
+- **Installing on Android:** a full install (its own window, no browser bar) needs the site on HTTPS. Over the local Wi-Fi address (`http://192.168.x.x:3000`), Chrome only offers "Add to Home screen", which creates a shortcut. iPhone's "Add to Home Screen" works either way.
 - **Analytics source:** views and watch time come from our own database. ImageKit's built-in player analytics is an Enterprise feature; set `NEXT_PUBLIC_PLAYER_ANALYTICS=true` if your plan includes it.

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter_Tight, Space_Grotesk, Space_Mono } from "next/font/google";
 import { Sidebar } from "@/components/Sidebar";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -15,6 +15,17 @@ export const metadata: Metadata = {
     template: "%s | Screening Room",
   },
   description: "A private place to watch.",
+  applicationName: "Screening Room",
+  // iPhone "Add to Home Screen": open full screen with a dark status bar.
+  appleWebApp: { capable: true, title: "Screening Room", statusBarStyle: "black-translucent" },
+  // Older iOS versions only honour the legacy tag for full-screen home-screen apps.
+  other: { "apple-mobile-web-app-capable": "yes" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0a0a0b",
+  colorScheme: "dark",
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
