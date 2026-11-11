@@ -103,7 +103,13 @@ In the ImageKit dashboard, go to Settings → Videos → Restrict unsigned URLs 
 
 ## Open the app (computer and phone)
 
-The app runs on your own computer, so that computer must be on with the server running (`npm run dev -- -H 0.0.0.0`, see above).
+### Public link (anyone, anywhere)
+**https://screening-room-tawny.vercel.app**
+
+It's hosted on Vercel and works on any device, including installing it on a phone's home screen. Sign in with a password. To deploy changes: `vercel deploy --prod` from this folder, or automatically on every push once the GitHub repo is connected in Vercel (Settings → Git, with Root Directory set to `web_app_video_try1`). Hosting keys live in Vercel → Settings → Environment Variables. The Supabase secret key is not needed there.
+
+### Local version (same Wi-Fi only)
+The local version runs on your own computer, so that computer must be on with the server running (`npm run dev -- -H 0.0.0.0`, see above).
 
 ### On the computer
 Open **http://localhost:3000** in Chrome, Edge or Safari.
