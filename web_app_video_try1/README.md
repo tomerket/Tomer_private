@@ -7,6 +7,7 @@ We build no video infrastructure ourselves. ImageKit stores the videos, streams 
 > How it was built and which tools were used: [HOW_IT_WAS_BUILT.md](HOW_IT_WAS_BUILT.md)
 > The original milestone plan and every later change: [plan.md](plan.md)
 > The design system (colours, type, card anatomy): [design-system/screening-room/MASTER.md](design-system/screening-room/MASTER.md), live at `/design`
+> How to open it on your computer or phone: [Open the app](#open-the-app-computer-and-phone)
 
 ---
 
@@ -97,6 +98,40 @@ node --env-file=.env.local scripts/seed-demo.mjs --clean                # remove
 
 ### Members-only protection at the media level (optional)
 In the ImageKit dashboard, go to Settings → Videos → Restrict unsigned URLs → "Restrict all requests". Then set `NEXT_PUBLIC_IMAGEKIT_SIGNED_DELIVERY=true`. From then on every video, thumbnail and stream URL is signed by `/api/sign`, which only signs files the viewer is allowed to watch.
+
+---
+
+## Open the app (computer and phone)
+
+The app runs on your own computer, so that computer must be on with the server running (`npm run dev -- -H 0.0.0.0`, see above).
+
+### On the computer
+Open **http://localhost:3000** in Chrome, Edge or Safari.
+
+### On your phone
+1. Connect the phone to the **same Wi-Fi** as the computer.
+2. Find the computer's local address. On Windows, run `ipconfig` and look for **IPv4 Address** under your Wi-Fi adapter (for example `192.168.1.76`). On a Mac, use System Settings → Wi-Fi → Details.
+3. On the phone, open **http://&lt;that-address&gt;:3000**, for example `http://192.168.1.76:3000`.
+4. If the page doesn't load:
+   - Check that the server was started with `-H 0.0.0.0`. Plain `npm run dev` only answers on the computer itself.
+   - On Windows, allow **Node.js** through the firewall when asked, or allow it under Windows Security → Firewall → Allow an app.
+   - If your address doesn't start with `192.168.` or `10.`, add it to `allowedDevOrigins` in `next.config.ts` and restart the server.
+   - The address can change when the router restarts, so run `ipconfig` again.
+
+### Sign in
+1. Open `/login` and choose the **Password** tab.
+2. If you don't have a password yet, set one from the computer:
+   ```bash
+   node --env-file=.env.local scripts/set-password.mjs you@example.com
+   ```
+3. On the phone, use the password. Email sign-in links point to `localhost`, which only works on the computer.
+
+### Put it on the phone's home screen
+Tap **Install app** in the top bar and follow the steps it shows:
+- **iPhone (Safari):** Share → **Add to Home Screen** → Add.
+- **Android (Chrome):** ⋮ menu → **Add to Home screen**.
+
+The home-screen icon only opens the app while the computer is running the server and the phone is on the same Wi-Fi. To use it anywhere, deploy the app to a host with an HTTPS address (for example Vercel) and add that address in Supabase → Authentication → URL Configuration.
 
 ---
 
