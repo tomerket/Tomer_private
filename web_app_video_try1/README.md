@@ -7,6 +7,7 @@ We build no video infrastructure ourselves. ImageKit stores the videos, streams 
 > How it was built and which tools were used: [HOW_IT_WAS_BUILT.md](HOW_IT_WAS_BUILT.md)
 > The original milestone plan and every later change: [plan.md](plan.md)
 > The design system (colours, type, card anatomy): [design-system/screening-room/MASTER.md](design-system/screening-room/MASTER.md), live at `/design`
+> Database tables, relations and access rules: [DB_README.md](DB_README.md)
 > How to open it on your computer or phone: [Open the app](#open-the-app-computer-and-phone)
 
 ---
