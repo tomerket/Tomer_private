@@ -1,0 +1,101 @@
+@import 'tailwindcss';
+
+/* Colors from the reference design, with white surfaces instead of black */
+@theme {
+  --font-sans: 'Barlow Semi Condensed', system-ui, sans-serif;
+
+  --color-ink: #1f1b2e;
+  --color-muted: #6b6880;
+  --color-line: #e7e4f0;
+  --color-soft: #f6f4fb;
+
+  --color-violet: #7c3aed;
+  --color-violet-dark: #5b21b6;
+  --color-violet-soft: #ede9fe;
+  --color-cyan: #22d3ee;
+  --color-success: #16a34a;
+  --color-danger: #dc2626;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  /* Cyan → violet diagonal background, like the reference */
+  background: linear-gradient(135deg, #22d3ee 0%, #60a5fa 35%, #8b5cf6 70%, #a855f7 100%) fixed;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Deep purple hero gradient used on the big "GO" cards */
+.hero-gradient {
+  background: linear-gradient(135deg, #7b1fa2 0%, #4c1d95 55%, #3730a3 100%);
+}
+
+.panel {
+  background: #fff;
+  border-radius: 1rem;
+  box-shadow: 0 10px 30px -12px rgb(49 23 99 / 0.35);
+}
+
+.input {
+  width: 100%;
+  border: 2px solid var(--color-line);
+  border-radius: 0.75rem;
+  padding: 0.7rem 0.9rem;
+  font-size: 1.05rem;
+  font-weight: 500;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.input:focus {
+  border-color: var(--color-violet);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+  transition: transform 0.08s, background 0.15s, opacity 0.15s;
+  cursor: pointer;
+}
+.btn:active {
+  transform: scale(0.98);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--color-violet);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-violet-dark);
+}
+.btn-ghost {
+  background: var(--color-soft);
+  color: var(--color-ink);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--color-violet-soft);
+}
+
+.label {
+  display: block;
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 0.3rem;
+}
