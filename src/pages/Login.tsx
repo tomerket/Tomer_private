@@ -13,11 +13,22 @@ export default function Login() {
   return (
     <AuthShell title="Welcome back" subtitle="Sign in to your family">
       <div className="mb-5 rounded-xl border-2 border-violet-soft bg-violet-soft/50 px-4 py-3 text-ink">
-        <b>First time here?</b> The family admin needs to{' '}
-        <Link to="/register" className="font-bold text-violet underline">
-          register
-        </Link>{' '}
-        and set up the family first. After that, family members can sign in.
+        <b>First time here? How it works:</b>
+        <ol className="mt-1 list-decimal space-y-0.5 pl-5">
+          <li>
+            The admin{' '}
+            <Link to="/register" className="font-bold text-violet underline">
+              registers
+            </Link>{' '}
+            with email and password.
+          </li>
+          <li>
+            On the first sign-in (<b>Admin</b> tab), the admin sets up the family and adds every family member.
+          </li>
+          <li>
+            From then on, each member signs in on the <b>Family member</b> tab.
+          </li>
+        </ol>
       </div>
       <div className="mb-6 grid grid-cols-2 gap-1 rounded-xl bg-soft p-1">
         {(['member', 'admin'] as Tab[]).map((t) => (
