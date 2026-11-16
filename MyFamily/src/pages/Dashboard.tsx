@@ -1,6 +1,7 @@
-import { BarChart3, Check, ChevronDown, X } from 'lucide-react';
+import { BarChart3, Check, ChevronDown, Gift, Trophy, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppLayout } from '../components/AppLayout';
+import { Avatar } from '../components/Face';
 import { ErrorBox } from '../components/ui';
 import { api, today } from '../lib/api';
 import { useSession } from '../lib/session';
@@ -14,6 +15,7 @@ type KidStats = {
   periods: Record<Period, { done: number; total: number }>;
   tasks: { id: number; title: string; icon: string; period: Period; archived: boolean; done: number; total: number }[];
   grid: Record<string, Record<number, 'yes' | 'no'>>;
+  rewards: { id: string; title: string; min_score: number; earnedDays: number }[];
   summary: { done: number; total: number; percent: number | null; perfectDays: number; rewardDays: number | null; trackedDays: number };
 };
 
@@ -163,6 +165,8 @@ export default function Dashboard() {
                 <PeriodChart stats={stats} colorOf={colorOf} />
               </div>
 
+              <RewardsSummary stats={stats} />
+
               <TaskPercent stats={stats} colorOf={colorOf} onRemove={removeForKid} />
             </>
           )}
@@ -306,6 +310,45 @@ function PeriodChart({ stats, colorOf }: { stats: KidStats[]; colorOf: (id: stri
                 );
               })}
             </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** Each kid's rewards and how many days in the chosen dates they earned each one. */
+function RewardsSummary({ stats }: { stats: KidStats[] }) {
+  const { me } = useSession();
+  const photo = (id: string) => me?.members.find((m) => m.id === id)?.photoUrl;
+  return (
+    <section>
+      <h3 className="mb-3 flex items-center gap-2 text-xl font-extrabold">
+        <Gift className="text-amber-500" /> Rewards
+      </h3>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {stats.map((k) => (
+          <div key={k.id} className="rounded-2xl border-2 border-amber-200 bg-amber-50/60 p-4">
+            <div className="mb-2 flex items-center gap-2 text-lg font-extrabold">
+              <Avatar name={k.name} photoUrl={photo(k.id)} role="kid" size={34} /> {k.name}
+            </div>
+            {k.rewards.length === 0 ? (
+              <p className="text-muted">No rewards for {k.name} yet (add them in Settings).</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {k.rewards.map((r) => (
+                  <li key={r.id} className="flex items-center gap-2">
+                    <Trophy size={18} className={r.earnedDays ? 'text-amber-500' : 'text-muted'} />
+                    <span className="min-w-0 flex-1">
+                      <span className="font-bold">{r.title}</span> <span className="text-sm text-muted">· {r.min_score} tasks/day</span>
+                    </span>
+                    <span className="whitespace-nowrap font-extrabold text-ink">
+                      earned {r.earnedDays}/{k.summary.trackedDays} days
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         ))}
       </div>

@@ -1,15 +1,16 @@
-import { ImagePlus, Plus, Trash2 } from 'lucide-react';
+import { Camera, ImagePlus, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ageOf, BirthdayInput, isValidBirthday } from '../components/BirthdayInput';
+import { Avatar, FacePicker } from '../components/Face';
 import { AuthShell, ErrorBox } from '../components/ui';
 import { api } from '../lib/api';
 import { resizeImage } from '../lib/image';
-import { useSession } from '../lib/session';
+import { useSession, type Me } from '../lib/session';
 import { Field } from './Login';
 
 type Role = 'kid' | 'parent';
-type MemberDraft = { name: string; role: Role; birthday: string };
+type MemberDraft = { name: string; role: Role; birthday: string; face?: string | null }; // face: cropped JPEG data URL
 
 // The draft is kept in sessionStorage so nothing is lost if the browser reloads the page
 // (phones often do this after choosing a photo from the gallery).
@@ -19,6 +20,7 @@ type Draft = {
   familyName: string;
   adminName: string;
   adminBirthday: string;
+  adminFace: string | null;
   others: MemberDraft[];
   photo: string | null; // resized JPEG as a data URL
 };
@@ -49,13 +51,14 @@ export default function Onboarding() {
   const [adminName, setAdminName] = useState(initial.adminName ?? '');
   const [photo, setPhoto] = useState<string | null>(initial.photo ?? null);
   const [adminBirthday, setAdminBirthday] = useState(initial.adminBirthday ?? '');
+  const [adminFace, setAdminFace] = useState<string | null>(initial.adminFace ?? null);
   const [others, setOthers] = useState<MemberDraft[]>(initial.others ?? [{ name: '', role: 'kid', birthday: '' }]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const preview = photo;
 
   useEffect(() => {
-    const draft: Draft = { step, familyName, adminName, adminBirthday, others, photo };
+    const draft: Draft = { step, familyName, adminName, adminBirthday, adminFace, others, photo };
     try {
       sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
     } catch {
@@ -65,7 +68,7 @@ export default function Onboarding() {
         /* storage unavailable */
       }
     }
-  }, [step, familyName, adminName, adminBirthday, others, photo]);
+  }, [step, familyName, adminName, adminBirthday, adminFace, others, photo]);
 
   async function pickPhoto(file: File | undefined) {
     if (!file) return;
@@ -88,14 +91,26 @@ export default function Onboarding() {
     e.preventDefault();
     setError(null);
     const filled = others.filter((m) => m.name.trim() || m.birthday);
-    const members = [{ name: adminName.trim(), role: 'parent' as Role, birthday: adminBirthday }, ...filled];
+    const members: MemberDraft[] = [{ name: adminName.trim(), role: 'parent', birthday: adminBirthday, face: adminFace }, ...filled];
     for (const m of members) {
       if (!m.name.trim()) return setError('Every family member needs a name');
       if (!isValidBirthday(m.birthday)) return setError(`Check ${m.name || 'the'} birthday (MM-DD-YYYY)`);
     }
     setBusy(true);
     try {
-      await api('/onboarding', { body: { familyName, adminName, members } });
+      await api('/onboarding', { body: { familyName, adminName, members: members.map(({ face: _f, ...m }) => m) } });
+      // Face photos: upload once the members exist
+      if (members.some((m) => m.face)) {
+        try {
+          const created = await api<Me>('/me');
+          for (const m of members) {
+            const id = created.members.find((x) => x.name.toLowerCase() === m.name.trim().toLowerCase())?.id;
+            if (m.face && id) await api(`/settings/members/${id}/photo`, { raw: await (await fetch(m.face)).blob() });
+          }
+        } catch {
+          /* faces can be added later in Settings */
+        }
+      }
       if (photo) {
         try {
           await api('/family/photo', { raw: await (await fetch(photo)).blob() });
@@ -156,9 +171,12 @@ export default function Onboarding() {
       <form onSubmit={finish} className="space-y-4">
         <MemberRow
           label="You (admin)"
-          value={{ name: adminName, role: 'parent', birthday: adminBirthday }}
+          value={{ name: adminName, role: 'parent', birthday: adminBirthday, face: adminFace }}
           locked
-          onChange={(p) => p.birthday !== undefined && setAdminBirthday(p.birthday)}
+          onChange={(p) => {
+            if (p.birthday !== undefined) setAdminBirthday(p.birthday);
+            if (p.face !== undefined) setAdminFace(p.face);
+          }}
         />
         {others.map((m, i) => (
           <MemberRow
@@ -204,8 +222,19 @@ function MemberRow({
   locked?: boolean;
 }) {
   const age = ageOf(value.birthday);
+  const [picking, setPicking] = useState(false);
   return (
     <div className="rounded-2xl border-2 border-line p-4">
+      {picking && (
+        <FacePicker
+          name={value.name || 'this person'}
+          onCancel={() => setPicking(false)}
+          onSave={async (blob) => {
+            onChange({ face: await blobToDataUrl(blob) });
+            setPicking(false);
+          }}
+        />
+      )}
       <div className="mb-3 flex items-center justify-between">
         <span className="font-extrabold uppercase tracking-wide text-violet">{label}</span>
         {onRemove && (
@@ -236,6 +265,17 @@ function MemberRow({
             {r}
           </button>
         ))}
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        {value.face ? <img src={value.face} alt="" className="h-12 w-12 rounded-full object-cover" /> : <Avatar name={value.name || '?'} role={value.role} size={48} />}
+        <button type="button" className="btn btn-ghost py-2" onClick={() => setPicking(true)}>
+          <Camera size={18} /> {value.face ? 'Change face photo' : 'Add face photo (optional)'}
+        </button>
+        {value.face && (
+          <button type="button" className="text-sm font-semibold text-muted hover:text-danger" onClick={() => onChange({ face: null })}>
+            Remove
+          </button>
+        )}
       </div>
     </div>
   );

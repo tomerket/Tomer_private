@@ -7,7 +7,6 @@ Task photos live in `task-photos/`, the sample family photo is `default-family.j
 |---|---|---|---|
 | toothbrush | [File:Toothbrush, Toothpaste, Dental Care (571741).jpg](https://commons.wikimedia.org/wiki/File:Toothbrush,_Toothpaste,_Dental_Care_(571741).jpg) | CC0 | Steve Buissinne, South Africa |
 | tooth | [File:Toothbrush, Toothpaste, Dental Care (571741) (cropped).jpg](https://commons.wikimedia.org/wiki/File:Toothbrush,_Toothpaste,_Dental_Care_(571741)_(cropped).jpg) | CC0 | Steve Buissinne, South Africa |
-| bed | [File:Hotel room bedroom in building on Chapel Street, Salford, Greater Manchester, England, on 5 October 2025.jpg](https://commons.wikimedia.org/wiki/File:Hotel_room_bedroom_in_building_on_Chapel_Street,_Salford,_Greater_Manchester,_England,_on_5_October_2025.jpg) | CC0 | MatthewHoobin |
 | socks | [File:Villased sokid, STM 1998.jpg](https://commons.wikimedia.org/wiki/File:Villased_sokid,_STM_1998.jpg) | CC0 | Venemaa; Petseri rajoon, Põrste küla; valmistaja: Helü, Linda; fotograaf: Tuul,  |
 | shoe | [File:Spoon on Sneakers in 1980s.jpg](https://commons.wikimedia.org/wiki/File:Spoon_on_Sneakers_in_1980s.jpg) | CC0 | Researcher for Spoon on Sneakers, who is my friend. |
 | milk | [File:Milk bottle and two doughnuts.jpg](https://commons.wikimedia.org/wiki/File:Milk_bottle_and_two_doughnuts.jpg) | CC0 | www.Pixel.la Free Stock Photos |
@@ -40,9 +39,9 @@ Task photos live in `task-photos/`, the sample family photo is `default-family.j
 | default-family | [File:Family watching beach sunset (Unsplash).jpg](https://commons.wikimedia.org/wiki/File:Family_watching_beach_sunset_(Unsplash).jpg) | CC0 | David Straight davidstraight |
 | backpack | [File:Wenger backpack.jpg](https://commons.wikimedia.org/wiki/File:Wenger_backpack.jpg) | CC0 | Sir Tragedy |
 | moon | [File:Full moon in Sagittarius-cropped.jpg](https://commons.wikimedia.org/wiki/File:Full_moon_in_Sagittarius-cropped.jpg) | CC0 | José Lodos Benavente |
-| cleaning | [File:Mop bucket in gas station bathroom.jpg](https://commons.wikimedia.org/wiki/File:Mop_bucket_in_gas_station_bathroom.jpg) | CC0 | Ser Amantio di Nicolao |
 | pencil | [File:Taking notes with a pencil (Unsplash).jpg](https://commons.wikimedia.org/wiki/File:Taking_notes_with_a_pencil_(Unsplash).jpg) | CC0 | Thought Catalog thoughtcatalog |
 | openbook | [File:Babies with soft books.jpg](https://commons.wikimedia.org/wiki/File:Babies_with_soft_books.jpg) | CC0 | https://pixabay.com/en/users/2081671-2081671/ |
 | daytime | [File:Blue sky and sun.png](https://commons.wikimedia.org/wiki/File:Blue_sky_and_sun.png) | CC0 | Matt R |
-| tshirt | [File:Jeff Sheldon 2014-11-18 (Unsplash Lj1S1 KD61k).jpg](https://commons.wikimedia.org/wiki/File:Jeff_Sheldon_2014-11-18_(Unsplash_Lj1S1_KD61k).jpg) | CC0 | Jeff Sheldon ugmonk |
-| pajamas | [File:Nachtjapon, objectnr KA 14370.tif](https://commons.wikimedia.org/wiki/File:Nachtjapon,_objectnr_KA_14370.tif) | CC0 | Amsterdam Museum |
+| bed | [File:Bed in hotel room 4.jpg](https://commons.wikimedia.org/wiki/File:Bed_in_hotel_room_4.jpg) | CC0 | Kurt Kaiser |
+| cleaning | [File:OXO Dust Brush and Pan.jpg](https://commons.wikimedia.org/wiki/File:OXO_Dust_Brush_and_Pan.jpg) | CC0 | Shenderson1 |
+| pajamas | [Simple Joys by Carter's Baby, Little Kid, and Toddler Boys' 3-Piece Snug-Fit Cotton Christmas Pajama Set](https://www.flickr.com/photos/185449710@N03/49067869033) | cc0 | Shopping Guide 7 |

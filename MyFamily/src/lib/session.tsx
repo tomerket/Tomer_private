@@ -9,6 +9,7 @@ export type MemberSummary = {
   is_admin: boolean;
   age: number;
   birthday?: string;
+  photoUrl?: string | null;
 };
 
 export type Me = {

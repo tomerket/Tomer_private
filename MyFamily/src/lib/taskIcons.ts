@@ -60,7 +60,7 @@ const PHOTOS = new Set([
   'alarm', 'apple', 'backpack', 'ball', 'basket', 'bed', 'bike', 'books', 'breakfast', 'broom', 'cat', 'dog',
   'droplet', 'heart', 'laptop', 'lotion', 'milk', 'music', 'openbook', 'palette', 'pencil', 'pill', 'plant',
   'plate', 'puzzle', 'sandwich', 'school', 'shoe', 'socks', 'sun', 'teddy', 'toilet', 'tooth', 'toothbrush',
-  'trash', 'tshirt', 'moon', 'cleaning', 'daytime', 'pajamas',
+  'trash', 'moon', 'cleaning', 'daytime', 'pajamas',
 ]);
 
 /** URL for a task picture, or null if the key isn't a known picture (e.g. an old emoji). */
