@@ -1,11 +1,11 @@
-import { BarChart3, Check, X } from 'lucide-react';
+import { BarChart3, Check, ChevronDown, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppLayout } from '../components/AppLayout';
 import { ErrorBox } from '../components/ui';
 import { api, today } from '../lib/api';
 import { useSession } from '../lib/session';
 import { PERIODS, type Period } from '../lib/taskIcons';
-import { TaskPicture } from './KidsTasks';
+import { SECTION_STYLE, TaskPicture } from './KidsTasks';
 
 type KidStats = {
   id: string;
@@ -39,7 +39,8 @@ export default function Dashboard() {
   const { me } = useSession();
   const kids = useMemo(() => (me?.members ?? []).filter((m) => m.role === 'kid'), [me]);
   const colorOf = (id: string) => SERIES[Math.max(0, kids.findIndex((k) => k.id === id)) % SERIES.length];
-  const [selected, setSelected] = useState<string[] | null>(null); // null = all kids
+  const [selected, setSelected] = useState<string[] | null>(() => (kids[0] ? [kids[0].id] : null)); // null = all kids
+  const [range, setRange] = useState('7');
   const t = today();
   const [from, setFrom] = useState(addDays(t, -6));
   const [to, setTo] = useState(t);
@@ -60,9 +61,10 @@ export default function Dashboard() {
   }, [kids.length, selected, from, to, reload]);
 
   function toggleKid(id: string) {
-    const cur = selected ?? [];
+    const cur = selected ?? kids.map((k) => k.id);
     const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
-    setSelected(next.length === 0 || next.length === kids.length ? null : next);
+    if (next.length === 0) return; // keep at least one kid
+    setSelected(next.length === kids.length ? null : next);
   }
 
   async function removeForKid(kidId: string, taskId: number, title: string, name: string) {
@@ -75,7 +77,6 @@ export default function Dashboard() {
     }
   }
 
-  const activePreset = PRESETS.find((p) => to === t && from === addDays(t, -(p.days - 1)))?.key;
   const agg = stats && {
     done: stats.reduce((a, k) => a + k.summary.done, 0),
     total: stats.reduce((a, k) => a + k.summary.total, 0),
@@ -83,8 +84,6 @@ export default function Dashboard() {
     tracked: stats.reduce((a, k) => a + k.summary.trackedDays, 0),
     reward: stats.some((k) => k.summary.rewardDays !== null) ? stats.reduce((a, k) => a + (k.summary.rewardDays ?? 0), 0) : null,
   };
-  const chip = (active: boolean) =>
-    `rounded-full border-2 px-4 py-1.5 font-bold transition ${active ? 'border-violet bg-violet text-white' : 'border-line bg-white text-muted hover:border-violet'}`;
 
   return (
     <AppLayout title="Dashboard" icon={<BarChart3 className="text-violet" />}>
@@ -93,40 +92,51 @@ export default function Dashboard() {
       ) : (
         <div className="space-y-5">
           {/* Filters: one row */}
-          <div className="flex flex-wrap items-end gap-x-5 gap-y-3 rounded-2xl bg-soft p-4">
+          <div className="flex flex-wrap items-end gap-x-4 gap-y-3 rounded-2xl bg-soft p-4">
             <div>
               <span className="label">Kids</span>
-              <div className="flex flex-wrap gap-2">
-                <button className={chip(selected === null)} onClick={() => setSelected(null)}>
-                  All
-                </button>
-                {kids.map((k) => (
-                  <button key={k.id} className={chip(selected !== null && selected.includes(k.id))} onClick={() => toggleKid(k.id)}>
-                    {k.name}
-                  </button>
-                ))}
-              </div>
+              <KidsDropdown
+                kids={kids.map((k) => ({ id: k.id, name: k.name, color: colorOf(k.id) }))}
+                selected={selected}
+                onToggle={toggleKid}
+                onAll={() => setSelected(null)}
+              />
             </div>
-            <div>
+            <label>
               <span className="label">Dates</span>
-              <div className="flex flex-wrap items-center gap-2">
+              <select
+                className="input !w-auto !py-2 font-bold"
+                value={range}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setRange(v);
+                  const p = PRESETS.find((x) => x.key === v);
+                  if (p) {
+                    setTo(t);
+                    setFrom(addDays(t, -(p.days - 1)));
+                  }
+                }}
+              >
                 {PRESETS.map((p) => (
-                  <button
-                    key={p.key}
-                    className={chip(activePreset === p.key)}
-                    onClick={() => {
-                      setTo(t);
-                      setFrom(addDays(t, -(p.days - 1)));
-                    }}
-                  >
-                    {p.label}
-                  </button>
+                  <option key={p.key} value={p.key}>
+                    Last {p.label}
+                  </option>
                 ))}
-                <input type="date" aria-label="From" className="input !w-auto !py-1.5" value={from} max={to} onChange={(e) => e.target.value && setFrom(e.target.value)} />
-                <span className="font-bold text-muted">to</span>
-                <input type="date" aria-label="To" className="input !w-auto !py-1.5" value={to} min={from} max={t} onChange={(e) => e.target.value && setTo(e.target.value)} />
+                <option value="custom">Choose dates…</option>
+              </select>
+            </label>
+            {range === 'custom' && (
+              <div className="flex items-end gap-2">
+                <label>
+                  <span className="label">From</span>
+                  <input type="date" className="input !w-auto !py-2" value={from} max={to} onChange={(e) => e.target.value && setFrom(e.target.value)} />
+                </label>
+                <label>
+                  <span className="label">To</span>
+                  <input type="date" className="input !w-auto !py-2" value={to} min={from} max={t} onChange={(e) => e.target.value && setTo(e.target.value)} />
+                </label>
               </div>
-            </div>
+            )}
           </div>
 
           <ErrorBox message={error} />
@@ -153,11 +163,7 @@ export default function Dashboard() {
                 <PeriodChart stats={stats} colorOf={colorOf} />
               </div>
 
-              {stats.length === 1 ? (
-                <TaskGrid kid={stats[0]} onRemove={(id, title) => removeForKid(stats[0].id, id, title, stats[0].name)} />
-              ) : (
-                <TaskCompare stats={stats} colorOf={colorOf} />
-              )}
+              <TaskPercent stats={stats} colorOf={colorOf} onRemove={removeForKid} />
             </>
           )}
         </div>
@@ -307,134 +313,144 @@ function PeriodChart({ stats, colorOf }: { stats: KidStats[]; colorOf: (id: stri
   );
 }
 
-/** One kid: task × day grid. ✓ = yes, empty = no, – = not on the list. */
-function TaskGrid({ kid, onRemove }: { kid: KidStats; onRemove: (taskId: number, title: string) => void }) {
-  const showGrid = kid.days.length <= 31;
+/** Kids picker: a dropdown list where each name is ticked (✓) on or off. */
+function KidsDropdown({
+  kids,
+  selected,
+  onToggle,
+  onAll,
+}: {
+  kids: { id: string; name: string; color: string }[];
+  selected: string[] | null;
+  onToggle: (id: string) => void;
+  onAll: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: PointerEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, [open]);
+  const isOn = (id: string) => selected === null || selected.includes(id);
+  const label = selected === null ? 'All kids' : kids.filter((k) => selected.includes(k.id)).map((k) => k.name).join(', ');
+  const box = (on: boolean) => (
+    <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border-2 ${on ? 'border-violet bg-violet' : 'border-line bg-white'}`}>
+      {on && <Check size={16} strokeWidth={4} className="text-white" />}
+    </span>
+  );
   return (
-    <section className="rounded-2xl border-2 border-line p-4 sm:p-5">
-      <h3 className="text-xl font-extrabold">{kid.name}: task by task</h3>
-      <p className="mb-3 text-muted">
-        <Check size={16} strokeWidth={4} className="inline text-violet" /> = Yes (done) · empty = No · – = not on the list ·{' '}
-        <X size={14} className="inline" /> = remove this task for {kid.name} only
-      </p>
-      <div className="overflow-x-auto">
-        <table className="w-full border-separate border-spacing-0 text-left">
-          <thead>
-            <tr>
-              <th className="sticky left-0 z-10 bg-white py-2 pr-3 font-bold">Task</th>
-              {showGrid &&
-                kid.days.map((d) => (
-                  <th key={d.day} className="px-1 py-2 text-center text-xs font-bold leading-tight text-muted">
-                    {weekday(d.day)}
-                    <br />
-                    {md(d.day)}
-                  </th>
-                ))}
-              <th className="px-2 py-2 text-right font-bold">Done</th>
-              <th className="w-8" />
-            </tr>
-          </thead>
-          <tbody>
-            {PERIODS.map((p) => {
-              const list = kid.tasks.filter((x) => x.period === p.key);
-              if (!list.length) return null;
-              return [
-                <tr key={p.key}>
-                  <td colSpan={showGrid ? kid.days.length + 3 : 3} className="bg-soft px-2 py-1 text-sm font-extrabold uppercase tracking-widest text-muted">
-                    {p.label}
-                  </td>
-                </tr>,
-                ...list.map((task) => (
-                  <tr key={task.id}>
-                    <td className="sticky left-0 z-10 border-b border-line bg-white py-1.5 pr-3">
-                      <div className="flex items-center gap-2 whitespace-nowrap">
-                        <TaskPicture icon={task.icon} className="h-9 w-9 rounded-lg" />
-                        <span className={`font-semibold ${task.archived ? 'text-muted line-through' : ''}`}>{task.title}</span>
-                      </div>
-                    </td>
-                    {showGrid &&
-                      kid.days.map((d) => {
-                        const v = kid.grid[d.day]?.[task.id];
-                        return (
-                          <td key={d.day} className="border-b border-line px-1 text-center" title={v === 'yes' ? 'Yes' : v === 'no' ? 'No' : 'Not on the list'}>
-                            {v === 'yes' ? (
-                              <span className="inline-grid h-6 w-6 place-items-center rounded-md bg-violet">
-                                <Check size={16} strokeWidth={4} className="text-white" />
-                              </span>
-                            ) : v === 'no' ? (
-                              <span className="inline-block h-6 w-6 rounded-md border-2 border-line" />
-                            ) : (
-                              <span className="text-muted">–</span>
-                            )}
-                          </td>
-                        );
-                      })}
-                    <td className="whitespace-nowrap border-b border-line px-2 text-right font-bold">
-                      {task.done}/{task.total}
-                    </td>
-                    <td className="border-b border-line text-center">
-                      {!task.archived && (
-                        <button aria-label={`Remove ${task.title} for ${kid.name}`} title={`Remove for ${kid.name}`} className="rounded-lg p-1.5 text-muted hover:bg-soft hover:text-danger" onClick={() => onRemove(task.id, task.title)}>
-                          <X size={18} />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                )),
-              ];
-            })}
-          </tbody>
-        </table>
-      </div>
-    </section>
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="input flex !w-auto min-w-[200px] max-w-[320px] items-center gap-2 !py-2 text-left font-bold"
+      >
+        <span className="truncate">{label}</span>
+        <ChevronDown size={18} className="ml-auto shrink-0 text-muted" />
+      </button>
+      {open && (
+        <div role="listbox" aria-multiselectable className="absolute left-0 top-full z-20 mt-1 w-64 rounded-xl bg-white p-2 shadow-xl ring-1 ring-line">
+          <button type="button" className="flex w-full items-center gap-3 rounded-lg px-2 py-2 font-bold hover:bg-soft" onClick={onAll}>
+            {box(selected === null)} All kids
+          </button>
+          <div className="my-1 h-px bg-line" />
+          {kids.map((k) => (
+            <button key={k.id} type="button" role="option" aria-selected={isOn(k.id)} className="flex w-full items-center gap-3 rounded-lg px-2 py-2 font-semibold hover:bg-soft" onClick={() => onToggle(k.id)}>
+              {box(isOn(k.id))}
+              <span className="h-2.5 w-2.5 rounded-full" style={{ background: k.color }} />
+              {k.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
-/** Several kids: each task's completion per kid (table view). */
-function TaskCompare({ stats, colorOf }: { stats: KidStats[]; colorOf: (id: string) => string }) {
-  const tasks = new Map<number, KidStats['tasks'][number]>();
-  stats.forEach((k) => k.tasks.forEach((x) => tasks.has(x.id) || tasks.set(x.id, x)));
+/** Task by task: % done per kid, grouped into Morning / During the day / Evening in their colors. */
+function TaskPercent({
+  stats,
+  colorOf,
+  onRemove,
+}: {
+  stats: KidStats[];
+  colorOf: (id: string) => string;
+  onRemove: (kidId: string, taskId: number, title: string, name: string) => void;
+}) {
+  const all = new Map<number, KidStats['tasks'][number]>();
+  stats.forEach((k) => k.tasks.forEach((x) => all.has(x.id) || all.set(x.id, x)));
   return (
-    <section className="rounded-2xl border-2 border-line p-4 sm:p-5">
-      <h3 className="text-xl font-extrabold">Task by task</h3>
-      <p className="mb-3 text-muted">Done / days on the list. Pick one kid above to see each day and to remove a task for that kid.</p>
-      <div className="overflow-x-auto">
-        <table className="w-full border-separate border-spacing-0 text-left">
-          <thead>
-            <tr>
-              <th className="py-2 pr-3 font-bold">Task</th>
-              {stats.map((k) => (
-                <th key={k.id} className="px-2 py-2 text-right font-bold">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: colorOf(k.id) }} />
-                    {k.name}
-                  </span>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {[...tasks.values()].map((task) => (
-              <tr key={task.id}>
-                <td className="border-b border-line py-1.5 pr-3">
-                  <div className="flex items-center gap-2 whitespace-nowrap">
-                    <TaskPicture icon={task.icon} className="h-8 w-8 rounded-lg" />
-                    <span className="font-semibold">{task.title}</span>
-                  </div>
-                </td>
-                {stats.map((k) => {
-                  const s = k.tasks.find((x) => x.id === task.id);
-                  return (
-                    <td key={k.id} className="whitespace-nowrap border-b border-line px-2 text-right font-bold">
-                      {s ? `${s.done}/${s.total} (${pct(s.done, s.total)}%)` : <span className="text-muted">–</span>}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <section className="space-y-4">
+      <h3 className="text-xl font-extrabold">Task by task (% done)</h3>
+      {PERIODS.map((p) => {
+        const list = [...all.values()].filter((x) => x.period === p.key);
+        if (!list.length) return null;
+        const s = SECTION_STYLE[p.key];
+        return (
+          <div key={p.key} className="overflow-hidden rounded-2xl" style={{ background: s.bg }}>
+            <div className="flex items-center gap-2 px-4 py-2 text-lg font-extrabold uppercase tracking-wide" style={{ color: s.heading }}>
+              <TaskPicture icon={p.icon} className="h-8 w-8 rounded-full" /> {p.label}
+            </div>
+            <div className="overflow-x-auto bg-white/90">
+              <table className="w-full text-left">
+                {stats.length > 1 && (
+                  <thead>
+                    <tr className="text-sm text-muted">
+                      <th className="px-4 py-2 font-bold">Task</th>
+                      {stats.map((k) => (
+                        <th key={k.id} className="px-3 py-2 font-bold">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="h-2.5 w-2.5 rounded-full" style={{ background: colorOf(k.id) }} />
+                            {k.name}
+                          </span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                )}
+                <tbody>
+                  {list.map((task) => (
+                    <tr key={task.id} className="border-t border-line">
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-2 whitespace-nowrap">
+                          <TaskPicture icon={task.icon} className="h-9 w-9 rounded-lg" />
+                          <span className={`font-semibold ${task.archived ? 'text-muted line-through' : ''}`}>{task.title}</span>
+                        </div>
+                      </td>
+                      {stats.map((k) => {
+                        const st = k.tasks.find((x) => x.id === task.id);
+                        if (!st) return <td key={k.id} className="px-3 text-muted">–</td>;
+                        const v = pct(st.done, st.total);
+                        return (
+                          <td key={k.id} className="px-3" title={`${k.name}: done ${st.done} of ${st.total} days`}>
+                            <div className="flex items-center gap-2">
+                              <span className="w-14 text-right text-lg font-extrabold text-ink">{v}%</span>
+                              {!task.archived && (
+                                <button
+                                  aria-label={`Remove ${task.title} for ${k.name}`}
+                                  title={`Remove for ${k.name}`}
+                                  className="rounded-md p-1 text-muted hover:bg-soft hover:text-danger"
+                                  onClick={() => onRemove(k.id, task.id, task.title, k.name)}
+                                >
+                                  <X size={16} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
     </section>
   );
 }

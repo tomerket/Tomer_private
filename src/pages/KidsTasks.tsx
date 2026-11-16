@@ -13,7 +13,7 @@ type Reward = { id: string; title: string; min_score: number };
 const DAYS_BACK = 5;
 
 /** Section look: background, heading color and tile accent. */
-const SECTION_STYLE: Record<Period, { bg: string; heading: string; accent: string }> = {
+export const SECTION_STYLE: Record<Period, { bg: string; heading: string; accent: string }> = {
   morning: { bg: 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)', heading: '#92400E', accent: '#F59E0B' },
   general: { bg: 'linear-gradient(135deg, #E0F2FE 0%, #CCFBF1 100%)', heading: '#075985', accent: '#0EA5E9' },
   evening: { bg: 'linear-gradient(135deg, #312E81 0%, #1E1B4B 100%)', heading: '#FFFFFF', accent: '#8B5CF6' },

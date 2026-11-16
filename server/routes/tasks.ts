@@ -139,16 +139,33 @@ async function checkAssignee(familyId: string, assignedTo: unknown): Promise<str
   return data.id;
 }
 
-const PT_COLS = 'id, text, day, done, assigned_to, created_by, created_at';
+// "day" is the start date
+const PT_COLS = 'id, text, day, due_date, done, done_at, assigned_to, created_by, created_at';
 
+/** Optional due date: null/'' = none; must not be before the start date. */
+function parseDue(input: unknown, start: string): string | null {
+  if (input === null || input === undefined || input === '') return null;
+  const due = parseDay(input);
+  if (due < start) throw new HttpError(400, 'The due date can’t be before the start date');
+  return due;
+}
+
+/**
+ * filter=today (default): tasks that have started by `day` and are not done, plus ones done
+ * recently (the browser keeps only those done today, in its own time zone).
+ * filter=open: everything not done, including tasks that start later.
+ */
 tasksRouter.get(
   '/parent-tasks',
   handle(async (req, res) => {
     const me = requireParent(req);
     let q = db().from('parent_tasks').select(PT_COLS).eq('family_id', me.family_id);
-    if (req.query.filter === 'open') q = q.eq('done', false).order('day').order('created_at');
-    else q = q.eq('day', parseDay(req.query.day)).order('created_at');
-    const { data, error } = await q;
+    if (req.query.filter === 'open') q = q.eq('done', false);
+    else {
+      const recent = new Date(Date.now() - 36 * 3_600_000).toISOString();
+      q = q.lte('day', parseDay(req.query.day)).or(`done.eq.false,done_at.gte.${recent}`);
+    }
+    const { data, error } = await q.order('due_date', { ascending: true, nullsFirst: false }).order('day').order('created_at');
     if (error) throw error;
     res.json({ tasks: data });
   }),
@@ -158,11 +175,13 @@ tasksRouter.post(
   '/parent-tasks',
   handle(async (req, res) => {
     const me = requireParent(req);
+    const day = parseDay(req.body?.day);
     const row = {
       family_id: me.family_id,
       created_by: me.id,
       text: requireText(req.body?.text, 'Task', 500),
-      day: parseDay(req.body?.day),
+      day,
+      due_date: parseDue(req.body?.dueDate, day),
       assigned_to: await checkAssignee(me.family_id, req.body?.assignedTo),
     };
     const { data, error } = await db().from('parent_tasks').insert(row).select(PT_COLS).single();
@@ -177,8 +196,18 @@ tasksRouter.patch(
     const me = requireParent(req);
     const patch: Record<string, unknown> = {};
     if ('text' in (req.body ?? {})) patch.text = requireText(req.body.text, 'Task', 500);
-    if ('done' in (req.body ?? {})) patch.done = Boolean(req.body.done);
+    if ('done' in (req.body ?? {})) {
+      patch.done = Boolean(req.body.done);
+      patch.done_at = patch.done ? new Date().toISOString() : null;
+    }
     if ('assignedTo' in (req.body ?? {})) patch.assigned_to = await checkAssignee(me.family_id, req.body.assignedTo);
+    if ('day' in (req.body ?? {}) || 'dueDate' in (req.body ?? {})) {
+      const { data: cur } = await db().from('parent_tasks').select('day, due_date').eq('id', req.params.id).eq('family_id', me.family_id).maybeSingle();
+      if (!cur) throw new HttpError(404, 'Task not found');
+      const start = 'day' in req.body ? parseDay(req.body.day) : cur.day;
+      patch.day = start;
+      patch.due_date = 'dueDate' in req.body ? parseDue(req.body.dueDate, start) : parseDue(cur.due_date, start);
+    }
     if (Object.keys(patch).length === 0) throw new HttpError(400, 'Nothing to update');
     const { data, error } = await db()
       .from('parent_tasks')
