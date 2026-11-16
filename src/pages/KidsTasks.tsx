@@ -178,38 +178,42 @@ export default function KidsTasks() {
           {!tasks ? (
             !error && <div className="py-10 text-center text-lg text-muted">Loading…</div>
           ) : (
-            <div className="grid flex-1 gap-4 lg:grid-cols-3">
+            <div className="flex flex-1 flex-col gap-3">
               {PERIODS.map((p) => {
                 const list = tasks.filter((t) => t.period === p.key);
                 if (list.length === 0) return null;
                 const s = SECTION_STYLE[p.key];
                 const sDone = list.filter((t) => t.checked).length;
                 return (
-                  <section key={p.key} className="flex flex-col rounded-3xl p-3 sm:p-4" style={{ background: s.bg }}>
-                    <h2 className="mb-3 flex items-center gap-2 text-2xl font-extrabold uppercase tracking-wide" style={{ color: s.heading }}>
-                      <TaskPicture icon={p.icon} className="h-9 w-9 rounded-full" />
-                      {p.label}
-                      <span className="ml-auto">
+                  /* One horizontal band per time of day: label on the left, tasks side by side */
+                  <section key={p.key} className="flex flex-col gap-3 rounded-3xl p-3 sm:flex-row sm:items-stretch sm:p-4" style={{ background: s.bg }}>
+                    <h2
+                      className="flex shrink-0 items-center gap-2 text-xl font-extrabold uppercase tracking-wide sm:w-36 sm:flex-col sm:justify-center sm:text-center"
+                      style={{ color: s.heading }}
+                    >
+                      <TaskPicture icon={p.icon} className="h-10 w-10 rounded-full sm:h-14 sm:w-14" />
+                      <span className="leading-tight">{p.label}</span>
+                      <span className="ml-auto text-lg sm:ml-0">
                         {sDone}/{list.length}
                       </span>
                     </h2>
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-1 gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] sm:overflow-visible sm:pb-0">
                       {list.map((t) => (
                         <button
                           key={t.id}
                           onClick={() => toggle(t)}
                           aria-pressed={t.checked}
                           disabled={!canEdit}
-                          className="flex items-center gap-3 rounded-2xl border-4 bg-white p-2 pr-3 text-left shadow-sm transition active:scale-[0.98] disabled:cursor-default"
+                          className="relative flex w-36 shrink-0 flex-col items-center gap-1.5 rounded-2xl border-[3px] bg-white p-2.5 text-center shadow-sm transition active:scale-[0.97] disabled:cursor-default sm:w-auto"
                           style={{ borderColor: t.checked ? s.accent : 'transparent' }}
                         >
-                          <TaskPicture icon={t.icon} className={`h-14 w-14 shrink-0 rounded-xl transition ${t.checked ? 'opacity-50' : ''}`} />
-                          <span className={`min-w-0 flex-1 text-xl font-bold leading-tight ${t.checked ? 'text-muted' : ''}`}>{t.title}</span>
+                          <TaskPicture icon={t.icon} className={`h-16 w-16 rounded-xl transition ${t.checked ? 'opacity-50' : ''}`} />
+                          <span className={`text-lg font-bold leading-tight ${t.checked ? 'text-muted' : ''}`}>{t.title}</span>
                           <span
-                            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border-4 transition"
+                            className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-lg border-[3px] transition"
                             style={{ borderColor: s.accent, background: t.checked ? s.accent : '#fff' }}
                           >
-                            {t.checked && <Check size={26} strokeWidth={4} className="text-white" />}
+                            {t.checked && <Check size={20} strokeWidth={4} className="text-white" />}
                           </span>
                         </button>
                       ))}

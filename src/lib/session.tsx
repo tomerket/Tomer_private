@@ -71,6 +71,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     seq.current++; // drop any /me still in flight
     lastUserId.current = null;
     setMe(null);
+    try {
+      localStorage.removeItem('mf_last_activity'); // so the next sign-in starts a fresh idle timer
+    } catch {
+      /* ignore */
+    }
     // Clear both kinds of session; 'local' sign-out never fails on a network error
     await Promise.allSettled([
       fetch('/api/logout', { method: 'POST', credentials: 'same-origin' }),
@@ -78,7 +83,78 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     ]);
   }, []);
 
+  useIdleLogout(Boolean(me), logout);
+
   return <SessionContext.Provider value={{ me, loading, refresh, logout }}>{children}</SessionContext.Provider>;
+}
+
+// ---------- Automatic logout after 15 minutes without activity ----------
+
+export const IDLE_MINUTES = 15;
+const IDLE_MS = IDLE_MINUTES * 60_000;
+const LAST_ACTIVITY_KEY = 'mf_last_activity';
+export const IDLE_FLAG_KEY = 'mf_idle_logout';
+const ACTIVITY_EVENTS = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart', 'scroll'] as const;
+
+function readLast(): number {
+  try {
+    return Number(localStorage.getItem(LAST_ACTIVITY_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+}
+function writeLast(t: number) {
+  try {
+    localStorage.setItem(LAST_ACTIVITY_KEY, String(t)); // shared by all tabs
+  } catch {
+    /* storage unavailable: this tab's timer still works */
+  }
+}
+
+/** Logs out after IDLE_MINUTES with no mouse/keyboard/touch activity in any tab (also when reopening the app later). */
+function useIdleLogout(signedIn: boolean, logout: () => Promise<void>) {
+  const last = useRef(Date.now());
+
+  useEffect(() => {
+    if (!signedIn) return;
+    const expire = async () => {
+      try {
+        sessionStorage.setItem(IDLE_FLAG_KEY, '1');
+      } catch {
+        /* ignore */
+      }
+      await logout();
+    };
+
+    // Coming back to the app after a long break
+    const stored = readLast();
+    if (stored && Date.now() - stored > IDLE_MS) {
+      expire();
+      return;
+    }
+    last.current = Date.now();
+    writeLast(last.current);
+
+    let lastWrite = 0;
+    const onActivity = () => {
+      const now = Date.now();
+      last.current = now;
+      if (now - lastWrite > 15_000) {
+        lastWrite = now;
+        writeLast(now);
+      }
+    };
+    ACTIVITY_EVENTS.forEach((e) => window.addEventListener(e, onActivity, { passive: true }));
+    const timer = window.setInterval(() => {
+      const latest = Math.max(last.current, readLast()); // activity in another tab counts too
+      if (Date.now() - latest > IDLE_MS) expire();
+    }, 20_000);
+
+    return () => {
+      ACTIVITY_EVENTS.forEach((e) => window.removeEventListener(e, onActivity));
+      window.clearInterval(timer);
+    };
+  }, [signedIn, logout]);
 }
 
 export function useSession() {
