@@ -112,6 +112,22 @@ function AdminLogin() {
 
   return (
     <form onSubmit={submit} className="space-y-4">
+      <div className="rounded-xl border-2 border-violet-soft bg-violet-soft/50 px-4 py-3 text-ink">
+        <b>How it works:</b>
+        <ol className="mt-1 list-decimal space-y-0.5 pl-5">
+          <li>
+            The admin{' '}
+            <Link to="/register" className="font-bold text-violet underline">
+              registers
+            </Link>{' '}
+            with email and password.
+          </li>
+          <li>On the first sign-in here, the admin sets up the family and adds every family member.</li>
+          <li>
+            From then on, each member signs in on the <b>Family member</b> tab.
+          </li>
+        </ol>
+      </div>
       <Field label="Email">
         <input className="input" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
       </Field>
