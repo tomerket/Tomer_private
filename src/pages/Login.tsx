@@ -25,7 +25,7 @@ export default function Login() {
   return (
     <AuthShell title="Welcome back" subtitle="Sign in to your family">
       {idle && (
-        <div role="status" className="mb-5 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 font-semibold text-amber-900">
+        <div role="status" className="mb-5 rounded-xl border-2 border-sun bg-sun-soft px-4 py-3 font-semibold text-sun-ink">
           You were logged out after {IDLE_MINUTES} minutes without activity. Please sign in again.
         </div>
       )}

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import express, { Router, type Request } from 'express';
 import { memberOf, requireCaller, type Member } from '../auth.js';
 import { db, PHOTO_BUCKET } from '../supabase.js';
@@ -98,6 +99,25 @@ settingsRouter.delete(
   }),
 );
 
+// ----- Own photos for kids tasks (public bucket, random names) -----
+
+const TASK_IMAGES = 'task-images';
+const taskImagePrefix = (familyId: string) => `${process.env.SUPABASE_URL}/storage/v1/object/public/${TASK_IMAGES}/${familyId}/`;
+
+settingsRouter.post(
+  '/settings/task-image',
+  express.raw({ type: FACE_TYPES, limit: '2mb' }),
+  handle(async (req, res) => {
+    const me = requireAdmin(req);
+    const type = (req.headers['content-type'] ?? '').split(';')[0];
+    if (!FACE_TYPES.includes(type) || !Buffer.isBuffer(req.body) || req.body.length === 0) throw new HttpError(400, 'Please upload a JPG, PNG or WEBP image');
+    const path = `${me.family_id}/${randomUUID()}.${type.split('/')[1].replace('jpeg', 'jpg')}`;
+    const { error } = await db().storage.from(TASK_IMAGES).upload(path, req.body, { contentType: type });
+    if (error) throw error;
+    res.status(201).json({ url: db().storage.from(TASK_IMAGES).getPublicUrl(path).data.publicUrl });
+  }),
+);
+
 // ----- Kids tasks -----
 
 const PERIODS = ['morning', 'general', 'evening'];
@@ -136,7 +156,8 @@ settingsRouter.post(
     const period = String(req.body?.period ?? '');
     if (!PERIODS.includes(period)) throw new HttpError(400, 'Choose Morning, General or Evening');
     const icon = String(req.body?.icon ?? '');
-    if (!/^[a-z0-9-]{1,30}$/.test(icon)) throw new HttpError(400, 'Choose a picture');
+    // A built-in picture key, or a photo this family uploaded
+    if (!/^[a-z0-9-]{1,30}$/.test(icon) && !icon.startsWith(taskImagePrefix(me.family_id))) throw new HttpError(400, 'Choose a picture');
     const member_ids = await parseKidIds(me.family_id, req.body?.memberIds);
 
     const { count } = await db()

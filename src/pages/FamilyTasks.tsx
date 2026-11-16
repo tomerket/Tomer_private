@@ -1,4 +1,4 @@
-import { ArrowRight, ClipboardCheck } from 'lucide-react';
+import { ClipboardCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AppLayout } from '../components/AppLayout';
 import { useRoles, useSession } from '../lib/session';
@@ -9,17 +9,14 @@ function BigCard({ to, img, title, text }: { to: string; img: string; title: str
   return (
     <Link
       to={to}
-      className="hero-gradient group flex min-h-[180px] flex-1 items-center gap-6 overflow-hidden rounded-3xl p-6 text-white shadow-xl transition hover:-translate-y-0.5 hover:shadow-2xl sm:gap-10 sm:p-10"
+      className="card-gradient lift group flex min-h-[180px] flex-1 items-center gap-6 overflow-hidden rounded-[28px] p-6 text-white transition hover:-translate-y-0.5 sm:gap-10 sm:p-10"
     >
-      <img src={img} alt="" className="h-28 w-28 shrink-0 rounded-2xl bg-white object-contain p-2 shadow-lg sm:h-44 sm:w-44" />
+      <img src={img} alt="" className="h-28 w-28 shrink-0 rounded-[20px] bg-white object-contain p-1.5 sm:h-44 sm:w-44" />
       <div className="min-w-0 flex-1">
-        <div className="text-5xl font-extrabold uppercase tracking-wide sm:text-7xl">{title}</div>
+        <div className="text-5xl font-extrabold leading-none sm:text-7xl">{title}</div>
         <div className="mt-2 text-xl font-medium text-white/90 sm:text-2xl">{text}</div>
       </div>
-      <span className="hidden shrink-0 items-center gap-2 rounded-2xl bg-white px-8 py-4 text-2xl font-extrabold text-ink sm:flex">
-        GO <ArrowRight className="transition group-hover:translate-x-1" />
-      </span>
-      <ArrowRight size={36} className="shrink-0 sm:hidden" />
+      <span className="shrink-0 rounded-full bg-white px-6 py-3 text-xl font-bold text-violet sm:px-8 sm:py-4 sm:text-2xl">Open</span>
     </Link>
   );
 }

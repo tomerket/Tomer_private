@@ -1,20 +1,30 @@
 @import 'tailwindcss';
 
-/* Colors from the reference design, with white surfaces instead of black */
+/*
+ * "Fridge door" design: violet + cyan from the reference, on white and lavender.
+ * Baloo 2 for headings and numbers, Figtree for reading text.
+ */
 @theme {
-  --font-sans: 'Barlow Semi Condensed', system-ui, sans-serif;
+  --font-sans: 'Figtree', system-ui, sans-serif;
+  --font-display: 'Baloo 2', system-ui, sans-serif;
 
-  --color-ink: #1f1b2e;
-  --color-muted: #6b6880;
-  --color-line: #e7e4f0;
-  --color-soft: #f6f4fb;
+  --color-ink: #1e1640;
+  --color-muted: #5b5378;
+  --color-line: #e4defa;
+  --color-soft: #f4f1ff;
 
-  --color-violet: #7c3aed;
-  --color-violet-dark: #5b21b6;
-  --color-violet-soft: #ede9fe;
-  --color-cyan: #22d3ee;
-  --color-success: #16a34a;
-  --color-danger: #dc2626;
+  --color-violet: #6d3bf5;
+  --color-violet-dark: #4b22c9;
+  --color-violet-soft: #ede7ff;
+  --color-cyan: #19c2e6;
+  --color-sun: #ffb703;
+  --color-sun-soft: #fff3d1;
+  --color-sun-ink: #8a5200;
+  --color-night: #2a1f66;
+  --color-day-soft: #e2f6fc;
+  --color-day-ink: #0b5e7a;
+  --color-success: #12925f;
+  --color-danger: #d93a5b;
 }
 
 html,
@@ -27,35 +37,52 @@ body {
   margin: 0;
   color: var(--color-ink);
   font-family: var(--font-sans);
-  /* Cyan → violet diagonal background, like the reference */
-  background: linear-gradient(135deg, #22d3ee 0%, #60a5fa 35%, #8b5cf6 70%, #a855f7 100%) fixed;
+  background: var(--color-soft);
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Deep purple hero gradient used on the big "GO" cards */
+/* Headings and big numbers use the rounded display face */
+h1,
+h2,
+h3,
+.font-extrabold {
+  font-family: var(--font-display);
+}
+
+/* The one gradient: top bands and the big Kids / Parents cards */
 .hero-gradient {
-  background: linear-gradient(135deg, #7b1fa2 0%, #4c1d95 55%, #3730a3 100%);
+  background: linear-gradient(120deg, var(--color-cyan) 0%, var(--color-violet) 55%, var(--color-violet-dark) 100%);
+}
+.card-gradient {
+  background: linear-gradient(120deg, var(--color-violet) 0%, var(--color-violet-dark) 100%);
+}
+
+/* Soft violet shadow, only on main items */
+.lift {
+  box-shadow: 0 10px 24px -14px rgb(77 34 201 / 0.55);
 }
 
 .panel {
   background: #fff;
-  border-radius: 1rem;
-  box-shadow: 0 10px 30px -12px rgb(49 23 99 / 0.35);
+  border-radius: 28px;
+  box-shadow: 0 10px 30px -18px rgb(77 34 201 / 0.45);
 }
 
 .input {
   width: 100%;
   border: 2px solid var(--color-line);
-  border-radius: 0.75rem;
-  padding: 0.7rem 0.9rem;
+  border-radius: 1rem;
+  padding: 0.7rem 0.95rem;
   font-size: 1.05rem;
   font-weight: 500;
   background: #fff;
+  color: var(--color-ink);
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 .input:focus {
   border-color: var(--color-violet);
+  box-shadow: 0 0 0 4px #d9ccff;
 }
 
 .btn {
@@ -63,11 +90,10 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border-radius: 0.75rem;
-  padding: 0.75rem 1.25rem;
+  border-radius: 9999px;
+  padding: 0.75rem 1.4rem;
   font-weight: 700;
   font-size: 1.05rem;
-  letter-spacing: 0.02em;
   transition: transform 0.08s, background 0.15s, opacity 0.15s;
   cursor: pointer;
 }
@@ -78,16 +104,24 @@ body {
   opacity: 0.55;
   cursor: not-allowed;
 }
+.btn:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--color-violet);
+  outline-offset: 2px;
+}
 .btn-primary {
   background: var(--color-violet);
   color: #fff;
+  box-shadow: 0 10px 24px -14px rgb(77 34 201 / 0.55);
 }
 .btn-primary:hover:not(:disabled) {
   background: var(--color-violet-dark);
 }
 .btn-ghost {
-  background: var(--color-soft);
+  background: #fff;
   color: var(--color-ink);
+  border: 2px solid var(--color-line);
 }
 .btn-ghost:hover:not(:disabled) {
   background: var(--color-violet-soft);
@@ -95,7 +129,44 @@ body {
 
 .label {
   display: block;
-  font-weight: 700;
+  font-weight: 600;
   font-size: 0.95rem;
   margin-bottom: 0.3rem;
+}
+
+/* The stamp: a tilted round check when a task is done */
+.stamp {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  border: 3px solid var(--color-line);
+  background: #fff;
+  transform: rotate(0deg) scale(0.92);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s, border-color 0.2s;
+}
+.stamp[data-on='true'] {
+  border-color: var(--color-violet);
+  background: var(--color-violet);
+  box-shadow: inset 0 0 0 3px #fff;
+  transform: rotate(-10deg) scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* Dashboard filters: every box the same size */
+.filter-box {
+  height: 3.25rem;
+  width: 15rem;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-weight: 700;
+  font-size: 1.05rem;
 }

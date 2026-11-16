@@ -82,7 +82,7 @@ export function FacePicker({ name, onCancel, onSave }: { name: string; onCancel:
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" role="dialog" aria-modal aria-label={`Face photo for ${name}`}>
       <div className="panel w-full max-w-lg p-5">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-2xl font-extrabold">Face photo · {name}</h2>
+          <h2 className="text-2xl font-extrabold">Face photo for {name}</h2>
           <button aria-label="Close" className="p-1 text-muted" onClick={onCancel}>
             <X />
           </button>

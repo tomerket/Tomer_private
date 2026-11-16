@@ -1,10 +1,11 @@
-import { Camera, ImageOff, Plus, Settings as SettingsIcon, Trash2, UserMinus, UserPlus, X } from 'lucide-react';
+import { Camera, ImageOff, Plus, Settings as SettingsIcon, Trash2, Upload, UserMinus, UserPlus, X } from 'lucide-react';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { AppLayout } from '../components/AppLayout';
 import { BirthdayInput, isValidBirthday } from '../components/BirthdayInput';
 import { Avatar, FacePicker } from '../components/Face';
 import { ErrorBox } from '../components/ui';
 import { api } from '../lib/api';
+import { squareImage } from '../lib/image';
 import { useSession, type MemberSummary } from '../lib/session';
 import { PERIODS, TASK_ICONS, type Period } from '../lib/taskIcons';
 import { TaskPicture } from './KidsTasks';
@@ -127,10 +128,10 @@ function MembersSettings() {
             <div className="min-w-0 flex-1">
               <div className="text-lg font-extrabold">
                 {m.name}
-                {m.is_admin && <span className="ml-2 rounded-full bg-violet-soft px-2 py-0.5 text-xs font-bold uppercase text-violet">Admin</span>}
+                {m.is_admin && <span className="ml-2 rounded-full bg-violet-soft px-2 py-0.5 text-xs font-bold text-violet">Admin</span>}
               </div>
               <div className="text-muted">
-                <span className="capitalize">{m.role}</span> · {fmtBirthday(m.birthday)} · age {m.age}
+                <span className="capitalize">{m.role}</span>, born {fmtBirthday(m.birthday)}, age {m.age}
               </div>
             </div>
             <button className="btn btn-ghost py-2" onClick={() => setFaceFor(m)}>
@@ -205,7 +206,7 @@ function AddMemberForm({ onDone }: { onDone: () => void }) {
   return (
     <form onSubmit={submit} className="space-y-3 rounded-2xl bg-soft p-4">
       <div className="flex items-center justify-between">
-        <span className="text-lg font-extrabold uppercase tracking-wide text-violet">New family member</span>
+        <span className="text-lg font-extrabold text-violet">New family member</span>
         <button type="button" aria-label="Close" className="p-1 text-muted" onClick={onDone}>
           <X />
         </button>
@@ -315,7 +316,7 @@ function TasksSettings() {
           const list = tasks.filter((t) => t.period === p.key);
           return (
             <section key={p.key}>
-              <h3 className="mb-2 flex items-center gap-2 text-xl font-extrabold uppercase tracking-wide">
+              <h3 className="mb-2 flex items-center gap-2 text-xl font-extrabold">
                 <TaskPicture icon={p.icon} className="h-7 w-7" /> {p.label}
                 <span className="text-base font-bold text-muted">({list.length})</span>
               </h3>
@@ -371,6 +372,22 @@ function AddTaskForm({ onAdded }: { onAdded: (t: Template) => void }) {
   const [kids, setKids] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  /** Upload a photo from the device, cropped to a square, and select it as the picture. */
+  async function uploadPhoto(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    setUploading(true);
+    try {
+      const { url } = await api<{ url: string }>('/settings/task-image', { raw: await squareImage(file) });
+      setIcon(url);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -390,7 +407,7 @@ function AddTaskForm({ onAdded }: { onAdded: (t: Template) => void }) {
 
   return (
     <form onSubmit={submit} className="space-y-4 rounded-2xl bg-soft p-4 sm:p-5">
-      <div className="text-lg font-extrabold uppercase tracking-wide text-violet">Add a kids task</div>
+      <div className="text-lg font-extrabold text-violet">Add a kids task</div>
       <Field label="Task name">
         <input className="input" placeholder="e.g. Practice piano" maxLength={60} value={title} onChange={(e) => setTitle(e.target.value)} />
       </Field>
@@ -419,7 +436,18 @@ function AddTaskForm({ onAdded }: { onAdded: (t: Template) => void }) {
       </div>
       <div>
         <span className="label">Picture</span>
-        <div className="grid max-h-56 grid-cols-6 gap-2 overflow-y-auto rounded-xl bg-white p-2 sm:grid-cols-10">
+        <div className="mb-2 flex flex-wrap items-center gap-3">
+          <label className={`btn btn-ghost cursor-pointer py-2 ${uploading ? 'opacity-60' : ''}`}>
+            <Upload size={18} /> {uploading ? 'Uploading…' : 'Upload a photo from this phone or computer'}
+            <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={(e) => uploadPhoto(e.target.files?.[0])} />
+          </label>
+          {icon.startsWith('https://') && (
+            <span className="inline-flex items-center gap-2 font-semibold text-violet">
+              <TaskPicture icon={icon} className="h-12 w-12 rounded-xl ring-2 ring-violet" /> Your photo is selected
+            </span>
+          )}
+        </div>
+        <div className="grid max-h-56 grid-cols-6 gap-2 overflow-y-auto rounded-2xl bg-white p-2 sm:grid-cols-10">
           {TASK_ICONS.map((i) => (
             <button
               key={i.key}
@@ -493,7 +521,7 @@ function RewardsSettings() {
   return (
     <div className="space-y-6">
       <form onSubmit={add} className="space-y-4 rounded-2xl bg-soft p-4 sm:p-5">
-        <div className="text-lg font-extrabold uppercase tracking-wide text-violet">Add a daily reward</div>
+        <div className="text-lg font-extrabold text-violet">Add a daily reward</div>
         <p className="text-muted">A kid earns the reward on a day they tick at least this many tasks (e.g. 11 of 14).</p>
         <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
           <Field label="Reward">
@@ -532,7 +560,7 @@ function RewardsSettings() {
               <div className="min-w-0 flex-1">
                 <div className="text-lg font-bold">{r.title}</div>
                 <div className="text-muted">
-                  {r.min_score} tasks a day · {kidNames(r.member_ids, me?.members ?? [])}
+                  {r.min_score} tasks a day, for {kidNames(r.member_ids, me?.members ?? [])}
                 </div>
               </div>
               <button aria-label={`Remove ${r.title}`} className="rounded-lg p-2 text-muted hover:bg-soft hover:text-danger" onClick={() => remove(r.id)}>

@@ -136,7 +136,7 @@ export default function Onboarding() {
 
   if (step === 1) {
     return (
-      <AuthShell title="Set up your family" subtitle="Step 1 of 2 · Family details" wide>
+      <AuthShell title="Set up your family" subtitle="Step 1 of 2: family details" wide>
         <form onSubmit={next} className="space-y-5">
           <Field label="Family name">
             <input className="input" placeholder="e.g. Cohen" value={familyName} onChange={(e) => setFamilyName(e.target.value)} required />
@@ -167,7 +167,7 @@ export default function Onboarding() {
   }
 
   return (
-    <AuthShell title="Who's in the family?" subtitle="Step 2 of 2 · Family members" wide>
+    <AuthShell title="Who's in the family?" subtitle="Step 2 of 2: family members" wide>
       <form onSubmit={finish} className="space-y-4">
         <MemberRow
           label="You (admin)"
@@ -236,7 +236,7 @@ function MemberRow({
         />
       )}
       <div className="mb-3 flex items-center justify-between">
-        <span className="font-extrabold uppercase tracking-wide text-violet">{label}</span>
+        <span className="font-extrabold text-violet">{label}</span>
         {onRemove && (
           <button type="button" aria-label="Remove member" className="p-1 text-muted hover:text-danger" onClick={onRemove}>
             <Trash2 size={18} />
@@ -247,7 +247,7 @@ function MemberRow({
         <Field label="Name">
           <input className="input disabled:bg-soft" value={value.name} disabled={locked} onChange={(e) => onChange({ name: e.target.value })} />
         </Field>
-        <Field label={`Birthday${age !== null ? ` · age ${age}` : ''}`}>
+        <Field label={`Birthday${age !== null ? ` (age ${age})` : ''}`}>
           <BirthdayInput value={value.birthday} onChange={(birthday) => onChange({ birthday })} />
         </Field>
       </div>
