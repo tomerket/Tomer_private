@@ -7,6 +7,8 @@ import { useSession } from '../lib/session';
 import { supabase } from '../lib/supabase';
 import { Field } from './Login';
 
+const DUPLICATE = 'This email is already registered. Sign in on the Admin tab instead.';
+
 export default function Register() {
   const navigate = useNavigate();
   const { refresh } = useSession();
@@ -30,13 +32,20 @@ export default function Register() {
       options: { emailRedirectTo: `${window.location.origin}/onboarding` },
     });
     setBusy(false);
-    if (error) return setError(error.message);
+    if (error) {
+      if (/already registered|already exists/i.test(error.message)) return setError(DUPLICATE);
+      return setError(error.message);
+    }
+    // Supabase hides duplicates: an existing email comes back as a user with no identities
+    if (data.user && data.user.identities?.length === 0) return setError(DUPLICATE);
     if (data.session) {
       await refresh();
       navigate('/onboarding');
-    }
-    else setCheckEmail(true);
+    } else setCheckEmail(true);
   }
+
+  const mismatch = confirm.length > 0 && password !== confirm;
+  const tooShort = password.length > 0 && password.length < 8;
 
   if (checkEmail) {
     return (
@@ -62,12 +71,22 @@ export default function Register() {
         </Field>
         <Field label="Password">
           <input className="input" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          {tooShort && <span className="mt-1 block text-sm font-semibold text-danger">At least 8 characters</span>}
         </Field>
         <Field label="Confirm password">
-          <input className="input" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
+          <input
+            className={`input ${mismatch ? 'border-danger focus:border-danger' : ''}`}
+            type="password"
+            autoComplete="new-password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            aria-invalid={mismatch}
+            required
+          />
+          {mismatch && <span className="mt-1 block text-sm font-semibold text-danger">Passwords don't match. Please fix before continuing.</span>}
         </Field>
         <ErrorBox message={error} />
-        <button className="btn btn-primary w-full" disabled={busy}>
+        <button className="btn btn-primary w-full" disabled={busy || mismatch || tooShort}>
           {busy ? 'Creating…' : 'Register'}
         </button>
       </form>

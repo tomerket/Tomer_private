@@ -11,25 +11,71 @@ import { Field } from './Login';
 type Role = 'kid' | 'parent';
 type MemberDraft = { name: string; role: Role; birthday: string };
 
+// The draft is kept in sessionStorage so nothing is lost if the browser reloads the page
+// (phones often do this after choosing a photo from the gallery).
+const DRAFT_KEY = 'mf_onboarding_draft';
+type Draft = {
+  step: 1 | 2;
+  familyName: string;
+  adminName: string;
+  adminBirthday: string;
+  others: MemberDraft[];
+  photo: string | null; // resized JPEG as a data URL
+};
+
+function loadDraft(): Partial<Draft> {
+  try {
+    return JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? '{}');
+  } catch {
+    return {};
+  }
+}
+
+function blobToDataUrl(b: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(b);
+  });
+}
+
 export default function Onboarding() {
   const navigate = useNavigate();
   const { refresh } = useSession();
-  const [step, setStep] = useState<1 | 2>(1);
-  const [familyName, setFamilyName] = useState('');
-  const [adminName, setAdminName] = useState('');
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [adminBirthday, setAdminBirthday] = useState('');
-  const [others, setOthers] = useState<MemberDraft[]>([{ name: '', role: 'kid', birthday: '' }]);
+  const [initial] = useState(loadDraft);
+  const [step, setStep] = useState<1 | 2>(initial.step ?? 1);
+  const [familyName, setFamilyName] = useState(initial.familyName ?? '');
+  const [adminName, setAdminName] = useState(initial.adminName ?? '');
+  const [photo, setPhoto] = useState<string | null>(initial.photo ?? null);
+  const [adminBirthday, setAdminBirthday] = useState(initial.adminBirthday ?? '');
+  const [others, setOthers] = useState<MemberDraft[]>(initial.others ?? [{ name: '', role: 'kid', birthday: '' }]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const preview = photo;
 
   useEffect(() => {
-    if (!photo) return setPreview(null);
-    const url = URL.createObjectURL(photo);
-    setPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [photo]);
+    const draft: Draft = { step, familyName, adminName, adminBirthday, others, photo };
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    } catch {
+      try {
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ ...draft, photo: null })); // photo too big to keep
+      } catch {
+        /* storage unavailable */
+      }
+    }
+  }, [step, familyName, adminName, adminBirthday, others, photo]);
+
+  async function pickPhoto(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    try {
+      setPhoto(await blobToDataUrl(await resizeImage(file)));
+    } catch {
+      setError("We couldn't read that photo. Please try another one.");
+    }
+  }
 
   function next(e: FormEvent) {
     e.preventDefault();
@@ -52,10 +98,15 @@ export default function Onboarding() {
       await api('/onboarding', { body: { familyName, adminName, members } });
       if (photo) {
         try {
-          await api('/family/photo', { raw: await resizeImage(photo) });
+          await api('/family/photo', { raw: await (await fetch(photo)).blob() });
         } catch {
           /* family is created; photo can be added from Home */
         }
+      }
+      try {
+        sessionStorage.removeItem(DRAFT_KEY);
+      } catch {
+        /* ignore */
       }
       await refresh();
       navigate('/');
@@ -90,7 +141,7 @@ export default function Onboarding() {
                   <span className="font-bold">Tap to choose a photo</span>
                 </>
               )}
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => pickPhoto(e.target.files?.[0])} />
             </label>
           </div>
           <ErrorBox message={error} />

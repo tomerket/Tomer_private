@@ -57,7 +57,7 @@ function MemberLogin() {
     if (!isValidBirthday(form.birthday)) return setError('Please enter your birthday as MM-DD-YYYY');
     setBusy(true);
     try {
-      await supabase.auth.signOut(); // make sure no admin session overrides the member session
+      await supabase.auth.signOut({ scope: 'local' }); // make sure no admin session overrides the member session
       await api('/member-login', { body: form });
       await refresh();
       navigate('/');

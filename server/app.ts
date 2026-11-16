@@ -2,6 +2,7 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import cookieParser from 'cookie-parser';
 import { sessionRouter } from './routes/session.js';
 import { familyRouter } from './routes/family.js';
+import { settingsRouter } from './routes/settings.js';
 import { tasksRouter } from './routes/tasks.js';
 import { HttpError } from './util.js';
 
@@ -15,6 +16,7 @@ app.get('/api/health', (_req, res) => {
 });
 app.use('/api', sessionRouter);
 app.use('/api', familyRouter);
+app.use('/api', settingsRouter);
 app.use('/api', tasksRouter);
 
 app.use('/api', (_req, res) => {
