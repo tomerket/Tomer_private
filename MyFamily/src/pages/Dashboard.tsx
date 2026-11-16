@@ -32,9 +32,10 @@ const weekday = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(
 const pct = (done: number, total: number) => (total ? Math.round((done / total) * 100) : 0);
 
 const PRESETS = [
-  { key: '7', label: '7 days', days: 7 },
-  { key: '14', label: '14 days', days: 14 },
-  { key: '30', label: '30 days', days: 30 },
+  { key: '1', label: 'Today', days: 1 },
+  { key: '7', label: 'Last 7 days', days: 7 },
+  { key: '14', label: 'Last 14 days', days: 14 },
+  { key: '30', label: 'Last 30 days', days: 30 },
 ];
 
 export default function Dashboard() {
@@ -121,7 +122,7 @@ export default function Dashboard() {
               >
                 {PRESETS.map((p) => (
                   <option key={p.key} value={p.key}>
-                    Last {p.label}
+                    {p.label}
                   </option>
                 ))}
                 <option value="custom">Choose dates…</option>
@@ -414,7 +415,11 @@ function KidsDropdown({
   );
 }
 
-/** Task by task: % done per kid, grouped into Morning / During the day / Evening in their colors. */
+/**
+ * Task by task: % done per kid, grouped into Morning / During the day / Evening in their colors.
+ * Closed by default (click to open). One table, so every kid's % sits in the same column,
+ * with kid names once at the top.
+ */
 function TaskPercent({
   stats,
   colorOf,
@@ -424,64 +429,81 @@ function TaskPercent({
   colorOf: (id: string) => string;
   onRemove: (kidId: string, taskId: number, title: string, name: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
   const all = new Map<number, KidStats['tasks'][number]>();
   stats.forEach((k) => k.tasks.forEach((x) => all.has(x.id) || all.set(x.id, x)));
   return (
-    <section className="space-y-4">
-      <h3 className="text-xl font-extrabold">Task by task (% done)</h3>
-      {PERIODS.map((p) => {
-        const list = [...all.values()].filter((x) => x.period === p.key);
-        if (!list.length) return null;
-        const s = SECTION_STYLE[p.key];
-        return (
-          <div key={p.key} className="overflow-hidden rounded-2xl" style={{ background: s.bg }}>
-            <div className="flex items-center gap-2 px-4 py-2 text-lg font-extrabold uppercase tracking-wide" style={{ color: s.heading }}>
-              <TaskPicture icon={p.icon} className="h-8 w-8 rounded-full" /> {p.label}
-            </div>
-            <div className="overflow-x-auto bg-white/90">
-              <table className="w-full text-left">
-                {stats.length > 1 && (
-                  <thead>
-                    <tr className="text-sm text-muted">
-                      <th className="px-4 py-2 font-bold">Task</th>
-                      {stats.map((k) => (
-                        <th key={k.id} className="px-3 py-2 font-bold">
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="h-2.5 w-2.5 rounded-full" style={{ background: colorOf(k.id) }} />
-                            {k.name}
-                          </span>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                )}
-                <tbody>
+    <section className="overflow-hidden rounded-2xl border-2 border-line">
+      <button
+        className="flex w-full items-center gap-2 px-4 py-3 text-left text-xl font-extrabold hover:bg-soft"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <ChevronDown size={22} className={`transition ${open ? '' : '-rotate-90'}`} />
+        Task by task (% done)
+        <span className="ml-auto text-base font-semibold text-muted">{open ? 'Hide' : 'Show'}</span>
+      </button>
+      {open && (
+        <div className="overflow-x-auto border-t border-line">
+          <table className="w-full table-fixed text-left">
+            <colgroup>
+              <col />
+              {stats.map((k) => (
+                <col key={k.id} className="w-36" />
+              ))}
+            </colgroup>
+            <thead>
+              <tr className="bg-white">
+                <th className="px-4 py-2 font-bold text-muted">Task</th>
+                {stats.map((k) => (
+                  <th key={k.id} className="px-3 py-2 text-right font-extrabold">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: colorOf(k.id) }} />
+                      {k.name}
+                    </span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            {PERIODS.map((p) => {
+              const list = [...all.values()].filter((x) => x.period === p.key);
+              if (!list.length) return null;
+              const s = SECTION_STYLE[p.key];
+              return (
+                <tbody key={p.key}>
+                  <tr>
+                    <td colSpan={stats.length + 1} className="px-4 py-1.5 text-base font-extrabold uppercase tracking-wide" style={{ background: s.bg, color: s.heading }}>
+                      <span className="inline-flex items-center gap-2">
+                        <TaskPicture icon={p.icon} className="h-7 w-7 rounded-full" /> {p.label}
+                      </span>
+                    </td>
+                  </tr>
                   {list.map((task) => (
                     <tr key={task.id} className="border-t border-line">
-                      <td className="px-4 py-2">
-                        <div className="flex items-center gap-2 whitespace-nowrap">
-                          <TaskPicture icon={task.icon} className="h-9 w-9 rounded-lg" />
-                          <span className={`font-semibold ${task.archived ? 'text-muted line-through' : ''}`}>{task.title}</span>
+                      <td className="px-4 py-1.5">
+                        <div className="flex items-center gap-2">
+                          <TaskPicture icon={task.icon} className="h-9 w-9 shrink-0 rounded-lg" />
+                          <span className={`truncate font-semibold ${task.archived ? 'text-muted line-through' : ''}`}>{task.title}</span>
                         </div>
                       </td>
                       {stats.map((k) => {
                         const st = k.tasks.find((x) => x.id === task.id);
-                        if (!st) return <td key={k.id} className="px-3 text-muted">–</td>;
-                        const v = pct(st.done, st.total);
                         return (
-                          <td key={k.id} className="px-3" title={`${k.name}: done ${st.done} of ${st.total} days`}>
-                            <div className="flex items-center gap-2">
-                              <span className="w-14 text-right text-lg font-extrabold text-ink">{v}%</span>
-                              {!task.archived && (
-                                <button
-                                  aria-label={`Remove ${task.title} for ${k.name}`}
-                                  title={`Remove for ${k.name}`}
-                                  className="rounded-md p-1 text-muted hover:bg-soft hover:text-danger"
-                                  onClick={() => onRemove(k.id, task.id, task.title, k.name)}
-                                >
-                                  <X size={16} />
-                                </button>
-                              )}
+                          <td key={k.id} className="px-3" title={st ? `${k.name}: done ${st.done} of ${st.total} days` : `${k.name}: not on the list`}>
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="w-14 text-right text-lg font-extrabold tabular-nums text-ink">{st ? `${pct(st.done, st.total)}%` : '–'}</span>
+                              <span className="w-7">
+                                {st && !task.archived && (
+                                  <button
+                                    aria-label={`Remove ${task.title} for ${k.name}`}
+                                    title={`Remove for ${k.name}`}
+                                    className="rounded-md p-1 text-muted hover:bg-soft hover:text-danger"
+                                    onClick={() => onRemove(k.id, task.id, task.title, k.name)}
+                                  >
+                                    <X size={16} />
+                                  </button>
+                                )}
+                              </span>
                             </div>
                           </td>
                         );
@@ -489,11 +511,11 @@ function TaskPercent({
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      })}
+              );
+            })}
+          </table>
+        </div>
+      )}
     </section>
   );
 }
