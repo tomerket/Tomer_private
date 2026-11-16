@@ -1,4 +1,4 @@
-import { MailCheck } from 'lucide-react';
+import { Info, MailCheck } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthShell, ErrorBox } from '../components/ui';
@@ -7,7 +7,9 @@ import { useSession } from '../lib/session';
 import { supabase } from '../lib/supabase';
 import { Field } from './Login';
 
-const DUPLICATE = 'This email is already registered. Sign in on the Admin tab instead.';
+const MIN_PASSWORD = 6;
+const PASSWORD_RULE = `Password needs at least ${MIN_PASSWORD} letters or numbers`;
+const DUPLICATE ='This email is already registered. Sign in on the Admin tab instead.';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -22,7 +24,7 @@ export default function Register() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (password.length < 8) return setError('Password must be at least 8 characters');
+    if (password.length < MIN_PASSWORD) return setError(PASSWORD_RULE);
     if (password !== confirm) return setError("Passwords don't match");
     setBusy(true);
     await api('/logout', { method: 'POST' }).catch(() => {}); // drop any family-member session
@@ -45,7 +47,7 @@ export default function Register() {
   }
 
   const mismatch = confirm.length > 0 && password !== confirm;
-  const tooShort = password.length > 0 && password.length < 8;
+  const tooShort = password.length > 0 && password.length < MIN_PASSWORD;
 
   if (checkEmail) {
     return (
@@ -69,10 +71,31 @@ export default function Register() {
         <Field label="Email">
           <input className="input" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         </Field>
-        <Field label="Password">
-          <input className="input" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          {tooShort && <span className="mt-1 block text-sm font-semibold text-danger">At least 8 characters</span>}
-        </Field>
+        <div>
+          <span className="label flex items-center gap-1.5">
+            Password
+            <span className="group relative inline-flex" tabIndex={0} aria-label={PASSWORD_RULE}>
+              <Info size={17} className="cursor-help text-violet" />
+              <span
+                role="tooltip"
+                className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 w-56 -translate-x-1/2 rounded-lg bg-ink px-3 py-2 text-sm font-medium text-white opacity-0 shadow-lg transition group-hover:opacity-100 group-focus:opacity-100"
+              >
+                {PASSWORD_RULE}
+              </span>
+            </span>
+          </span>
+          <input
+            className="input"
+            type="password"
+            autoComplete="new-password"
+            title={PASSWORD_RULE}
+            placeholder={`At least ${MIN_PASSWORD} characters`}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+          {tooShort && <span className="mt-1 block text-sm font-semibold text-danger">{PASSWORD_RULE}</span>}
+        </div>
         <Field label="Confirm password">
           <input
             className={`input ${mismatch ? 'border-danger focus:border-danger' : ''}`}

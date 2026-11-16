@@ -92,12 +92,15 @@ export function AppLayout({
   icon,
   children,
   flush = false,
+  fill = false,
 }: {
   title: string;
   icon?: ReactNode;
   children: ReactNode;
   /** No inner padding / header bar, for full-bleed pages like Home. */
   flush?: boolean;
+  /** Content is a flex column filling the panel height (children can use flex-1). */
+  fill?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -135,7 +138,13 @@ export function AppLayout({
               <TodayBadge />
             </div>
           )}
-          <div className={flush ? 'relative flex flex-1 flex-col' : 'flex-1 overflow-y-auto p-4 sm:p-7'}>{children}</div>
+          <div
+            className={
+              flush ? 'relative flex flex-1 flex-col' : fill ? 'flex flex-1 flex-col overflow-y-auto p-4 sm:p-6' : 'flex-1 overflow-y-auto p-4 sm:p-7'
+            }
+          >
+            {children}
+          </div>
         </div>
       </main>
     </div>

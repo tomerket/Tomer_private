@@ -9,28 +9,62 @@ import { PERIODS, TASK_ICONS, type Period } from '../lib/taskIcons';
 import { TaskPicture } from './KidsTasks';
 import { Field } from './Login';
 
-type Tab = 'members' | 'tasks';
+type Tab = 'members' | 'tasks' | 'rewards';
+const TAB_LABEL: Record<Tab, string> = { members: 'Family members', tasks: 'Kids tasks', rewards: 'Rewards' };
 
 export default function Settings() {
   const [tab, setTab] = useState<Tab>('members');
   return (
     <AppLayout title="Settings" icon={<SettingsIcon className="text-violet" />}>
       <div className="mx-auto max-w-4xl">
-        <div className="mb-6 grid grid-cols-2 gap-1 rounded-xl bg-soft p-1 sm:w-96">
-          {(['members', 'tasks'] as Tab[]).map((t) => (
+        <div className="mb-6 grid grid-cols-3 gap-1 rounded-xl bg-soft p-1 sm:w-[32rem]">
+          {(Object.keys(TAB_LABEL) as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`rounded-lg py-2.5 text-lg font-bold transition ${tab === t ? 'bg-white text-violet shadow' : 'text-muted'}`}
             >
-              {t === 'members' ? 'Family members' : 'Kids tasks'}
+              {TAB_LABEL[t]}
             </button>
           ))}
         </div>
-        {tab === 'members' ? <MembersSettings /> : <TasksSettings />}
+        {tab === 'members' ? <MembersSettings /> : tab === 'tasks' ? <TasksSettings /> : <RewardsSettings />}
       </div>
     </AppLayout>
   );
+}
+
+// ---------------- Kid picker (All kids / some kids) ----------------
+
+/** value null = all kids */
+function KidPicker({ value, onChange }: { value: string[] | null; onChange: (v: string[] | null) => void }) {
+  const { me } = useSession();
+  const kids = (me?.members ?? []).filter((m) => m.role === 'kid');
+  const toggle = (id: string) => {
+    const cur = value ?? [];
+    const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+    onChange(next.length === 0 || next.length === kids.length ? null : next);
+  };
+  const chip = (active: boolean) =>
+    `rounded-full border-2 px-4 py-1.5 font-bold transition ${active ? 'border-violet bg-violet-soft text-violet' : 'border-line bg-white text-muted'}`;
+  return (
+    <div className="flex flex-wrap gap-2">
+      <button type="button" className={chip(value === null)} onClick={() => onChange(null)}>
+        All kids
+      </button>
+      {kids.map((k) => (
+        <button key={k.id} type="button" className={chip(value !== null && value.includes(k.id))} onClick={() => toggle(k.id)}>
+          {k.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function kidNames(ids: string[] | null, members: MemberSummary[]) {
+  if (!ids) return 'All kids';
+  const names = members.filter((m) => ids.includes(m.id)).map((m) => m.name);
+  return names.length ? names.join(', ') : 'No kids';
 }
 
 // ---------------- Family members ----------------
@@ -177,12 +211,14 @@ function AddMemberForm({ onDone }: { onDone: () => void }) {
 
 // ---------------- Kids tasks ----------------
 
-type Template = { id: number; title: string; icon: string; period: Period; sort_order: number };
+type Template = { id: number; title: string; icon: string; period: Period; sort_order: number; member_ids: string[] | null };
 
 function TasksSettings() {
+  const { me } = useSession();
   const [tasks, setTasks] = useState<Template[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [editKidsId, setEditKidsId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -194,6 +230,16 @@ function TasksSettings() {
   useEffect(() => {
     load();
   }, [load]);
+
+  async function setKids(id: number, memberIds: string[] | null) {
+    setError(null);
+    try {
+      const { task } = await api<{ task: Template }>(`/settings/kid-tasks/${id}`, { method: 'PATCH', body: { memberIds: memberIds ?? 'all' } });
+      setTasks((l) => l?.map((t) => (t.id === id ? task : t)) ?? null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
 
   async function remove(id: number) {
     setError(null);
@@ -226,9 +272,19 @@ function TasksSettings() {
               ) : (
                 <ul className="grid gap-2 sm:grid-cols-2">
                   {list.map((t) => (
-                    <li key={t.id} className="flex items-center gap-3 rounded-2xl border-2 border-line p-2 pr-3">
-                      <TaskPicture icon={t.icon} className="h-12 w-12" />
-                      <span className="min-w-0 flex-1 text-lg font-bold">{t.title}</span>
+                    <li key={t.id} className="flex flex-wrap items-center gap-3 rounded-2xl border-2 border-line p-2 pr-3">
+                      <TaskPicture icon={t.icon} className="h-12 w-12 rounded-lg" />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-lg font-bold">{t.title}</div>
+                        <button className="text-sm font-semibold text-violet hover:underline" onClick={() => setEditKidsId(editKidsId === t.id ? null : t.id)}>
+                          For: {kidNames(t.member_ids, me?.members ?? [])} ✎
+                        </button>
+                      </div>
+                      {editKidsId === t.id && (
+                        <div className="w-full">
+                          <KidPicker value={t.member_ids} onChange={(ids) => setKids(t.id, ids)} />
+                        </div>
+                      )}
                       {confirmId === t.id ? (
                         <>
                           <button className="btn bg-danger px-3 py-1.5 text-white" onClick={() => remove(t.id)}>
@@ -260,6 +316,7 @@ function AddTaskForm({ onAdded }: { onAdded: (t: Template) => void }) {
   const [title, setTitle] = useState('');
   const [period, setPeriod] = useState<Period>('general');
   const [icon, setIcon] = useState('star');
+  const [kids, setKids] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -269,7 +326,7 @@ function AddTaskForm({ onAdded }: { onAdded: (t: Template) => void }) {
     if (!title.trim()) return setError('Please enter the task name');
     setBusy(true);
     try {
-      const { task } = await api<{ task: Template }>('/settings/kid-tasks', { body: { title, period, icon } });
+      const { task } = await api<{ task: Template }>('/settings/kid-tasks', { body: { title, period, icon, memberIds: kids ?? 'all' } });
       onAdded(task);
       setTitle('');
     } catch (err) {
@@ -305,6 +362,10 @@ function AddTaskForm({ onAdded }: { onAdded: (t: Template) => void }) {
         </div>
       </div>
       <div>
+        <span className="label">For which kids</span>
+        <KidPicker value={kids} onChange={setKids} />
+      </div>
+      <div>
         <span className="label">Picture</span>
         <div className="grid max-h-56 grid-cols-6 gap-2 overflow-y-auto rounded-xl bg-white p-2 sm:grid-cols-10">
           {TASK_ICONS.map((i) => (
@@ -319,7 +380,7 @@ function AddTaskForm({ onAdded }: { onAdded: (t: Template) => void }) {
                 icon === i.key ? 'border-violet bg-violet-soft' : 'border-transparent hover:bg-soft'
               }`}
             >
-              <TaskPicture icon={i.key} className="h-full w-full" />
+              <TaskPicture icon={i.key} className="h-full w-full rounded-lg" />
             </button>
           ))}
         </div>
@@ -329,5 +390,106 @@ function AddTaskForm({ onAdded }: { onAdded: (t: Template) => void }) {
         <Plus size={20} /> {busy ? 'Adding…' : 'Add task'}
       </button>
     </form>
+  );
+}
+
+// ---------------- Rewards ----------------
+
+type Reward = { id: string; title: string; min_score: number; member_ids: string[] | null };
+
+function RewardsSettings() {
+  const { me } = useSession();
+  const [rewards, setRewards] = useState<Reward[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [title, setTitle] = useState('');
+  const [score, setScore] = useState(11);
+  const [kids, setKids] = useState<string[] | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api<{ rewards: Reward[] }>('/settings/rewards')
+      .then((r) => setRewards(r.rewards))
+      .catch((e) => setError((e as Error).message));
+  }, []);
+
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (!title.trim()) return setError('Please enter the reward');
+    setBusy(true);
+    try {
+      const { reward } = await api<{ reward: Reward }>('/settings/rewards', { body: { title, minScore: score, memberIds: kids ?? 'all' } });
+      setRewards((l) => [...(l ?? []), reward].sort((a, b) => a.min_score - b.min_score));
+      setTitle('');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(id: string) {
+    setError(null);
+    try {
+      await api(`/settings/rewards/${id}`, { method: 'DELETE' });
+      setRewards((l) => l?.filter((r) => r.id !== id) ?? null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <form onSubmit={add} className="space-y-4 rounded-2xl bg-soft p-4 sm:p-5">
+        <div className="text-lg font-extrabold uppercase tracking-wide text-violet">Add a daily reward</div>
+        <p className="text-muted">A kid earns the reward on a day they tick at least this many tasks (e.g. 11 of 14).</p>
+        <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+          <Field label="Reward">
+            <input className="input" placeholder="e.g. 30 minutes of screen time" maxLength={80} value={title} onChange={(e) => setTitle(e.target.value)} />
+          </Field>
+          <Field label="Tasks needed per day">
+            <input
+              className="input sm:w-40"
+              type="number"
+              min={1}
+              max={100}
+              value={score}
+              onChange={(e) => setScore(Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
+            />
+          </Field>
+        </div>
+        <div>
+          <span className="label">For which kids</span>
+          <KidPicker value={kids} onChange={setKids} />
+        </div>
+        <ErrorBox message={error} />
+        <button className="btn btn-primary w-full sm:w-auto" disabled={busy}>
+          <Plus size={20} /> {busy ? 'Adding…' : 'Add reward'}
+        </button>
+      </form>
+
+      {!rewards ? (
+        <div className="py-6 text-center text-muted">Loading…</div>
+      ) : rewards.length === 0 ? (
+        <p className="text-muted">No rewards yet.</p>
+      ) : (
+        <ul className="space-y-2">
+          {rewards.map((r) => (
+            <li key={r.id} className="flex items-center gap-3 rounded-2xl border-2 border-line p-3">
+              <TaskPicture icon="gift" className="h-12 w-12 rounded-lg" />
+              <div className="min-w-0 flex-1">
+                <div className="text-lg font-bold">{r.title}</div>
+                <div className="text-muted">
+                  {r.min_score} tasks a day · {kidNames(r.member_ids, me?.members ?? [])}
+                </div>
+              </div>
+              <button aria-label={`Remove ${r.title}`} className="rounded-lg p-2 text-muted hover:bg-soft hover:text-danger" onClick={() => remove(r.id)}>
+                <Trash2 size={20} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

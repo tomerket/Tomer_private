@@ -61,6 +61,17 @@ settingsRouter.delete(
 
 const PERIODS = ['morning', 'general', 'evening'];
 
+/** null/empty/"all" = all kids; otherwise every id must be a kid in this family. */
+async function parseKidIds(familyId: string, input: unknown): Promise<string[] | null> {
+  if (input === null || input === undefined || input === 'all') return null;
+  if (!Array.isArray(input)) throw new HttpError(400, 'Choose which kids');
+  const ids = [...new Set(input.map(String))];
+  if (ids.length === 0) throw new HttpError(400, 'Choose at least one kid, or All kids');
+  const { data } = await db().from('members').select('id').eq('family_id', familyId).eq('role', 'kid').in('id', ids);
+  if ((data ?? []).length !== ids.length) throw new HttpError(400, 'Unknown kid selected');
+  return ids;
+}
+
 settingsRouter.get(
   '/settings/kid-tasks',
   handle(async (req, res) => {
@@ -85,6 +96,7 @@ settingsRouter.post(
     if (!PERIODS.includes(period)) throw new HttpError(400, 'Choose Morning, General or Evening');
     const icon = String(req.body?.icon ?? '');
     if (!/^[a-z0-9-]{1,30}$/.test(icon)) throw new HttpError(400, 'Choose a picture');
+    const member_ids = await parseKidIds(me.family_id, req.body?.memberIds);
 
     const { count } = await db()
       .from('kid_task_templates')
@@ -101,11 +113,86 @@ settingsRouter.post(
       .limit(1);
     const { data, error } = await db()
       .from('kid_task_templates')
-      .insert({ family_id: me.family_id, title, period, icon, sort_order: (last?.[0]?.sort_order ?? 0) + 1 })
+      .insert({ family_id: me.family_id, title, period, icon, member_ids, sort_order: (last?.[0]?.sort_order ?? 0) + 1 })
       .select(TEMPLATE_COLS)
       .single();
     if (error) throw error;
     res.status(201).json({ task: data });
+  }),
+);
+
+/** Change which kids a task is for. */
+settingsRouter.patch(
+  '/settings/kid-tasks/:id',
+  handle(async (req, res) => {
+    const me = requireAdmin(req);
+    const member_ids = await parseKidIds(me.family_id, req.body?.memberIds);
+    const { data, error } = await db()
+      .from('kid_task_templates')
+      .update({ member_ids })
+      .eq('id', Number(req.params.id))
+      .eq('family_id', me.family_id)
+      .is('archived_at', null)
+      .select(TEMPLATE_COLS)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new HttpError(404, 'Task not found');
+    res.json({ task: data });
+  }),
+);
+
+// ----- Rewards -----
+
+const REWARD_COLS = 'id, title, min_score, member_ids';
+
+settingsRouter.get(
+  '/settings/rewards',
+  handle(async (req, res) => {
+    const me = requireAdmin(req);
+    const { data, error } = await db()
+      .from('kid_rewards')
+      .select(REWARD_COLS)
+      .eq('family_id', me.family_id)
+      .is('archived_at', null)
+      .order('min_score');
+    if (error) throw error;
+    res.json({ rewards: data });
+  }),
+);
+
+settingsRouter.post(
+  '/settings/rewards',
+  handle(async (req, res) => {
+    const me = requireAdmin(req);
+    const title = requireText(req.body?.title, 'Reward', 80);
+    const min_score = Number(req.body?.minScore);
+    if (!Number.isInteger(min_score) || min_score < 1 || min_score > 100) throw new HttpError(400, 'Score must be a whole number from 1');
+    const member_ids = await parseKidIds(me.family_id, req.body?.memberIds);
+    const { data, error } = await db()
+      .from('kid_rewards')
+      .insert({ family_id: me.family_id, title, min_score, member_ids })
+      .select(REWARD_COLS)
+      .single();
+    if (error) throw error;
+    res.status(201).json({ reward: data });
+  }),
+);
+
+settingsRouter.delete(
+  '/settings/rewards/:id',
+  handle(async (req, res) => {
+    const me = requireAdmin(req);
+    const { data, error } = await db()
+      .from('kid_rewards')
+      .update({ archived_at: new Date().toISOString() })
+      .eq('id', req.params.id)
+      .eq('family_id', me.family_id)
+      .is('archived_at', null)
+      .select('id')
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new HttpError(404, 'Reward not found');
+    res.json({ ok: true });
   }),
 );
 
