@@ -27,6 +27,7 @@ export const TASK_ICONS: { key: string; label: string }[] = [
   { key: 'broom', label: 'Sweep' },
   { key: 'sponge', label: 'Wash' },
   { key: 'sparkles', label: 'Tidy' },
+  { key: 'cleaning', label: 'Cleaning' },
   { key: 'trash', label: 'Trash' },
   { key: 'basket', label: 'Laundry' },
   { key: 'plant', label: 'Plants' },
@@ -40,8 +41,10 @@ export const TASK_ICONS: { key: string; label: string }[] = [
   { key: 'droplet', label: 'Water' },
   { key: 'pill', label: 'Medicine' },
   { key: 'alarm', label: 'Wake up' },
-  { key: 'sun', label: 'Sun' },
-  { key: 'moon', label: 'Pajamas' },
+  { key: 'sun', label: 'Sunrise' },
+  { key: 'daytime', label: 'Day' },
+  { key: 'pajamas', label: 'Pajamas' },
+  { key: 'moon', label: 'Moon' },
   { key: 'sleeping', label: 'Sleep' },
   { key: 'calendar', label: 'Calendar' },
   { key: 'heart', label: 'Kindness' },
@@ -57,7 +60,7 @@ const PHOTOS = new Set([
   'alarm', 'apple', 'backpack', 'ball', 'basket', 'bed', 'bike', 'books', 'breakfast', 'broom', 'cat', 'dog',
   'droplet', 'heart', 'laptop', 'lotion', 'milk', 'music', 'openbook', 'palette', 'pencil', 'pill', 'plant',
   'plate', 'puzzle', 'sandwich', 'school', 'shoe', 'socks', 'sun', 'teddy', 'toilet', 'tooth', 'toothbrush',
-  'trash', 'tshirt',
+  'trash', 'tshirt', 'moon', 'cleaning', 'daytime', 'pajamas',
 ]);
 
 /** URL for a task picture, or null if the key isn't a known picture (e.g. an old emoji). */
@@ -70,6 +73,6 @@ export type Period = 'morning' | 'general' | 'evening';
 
 export const PERIODS: { key: Period; label: string; icon: string }[] = [
   { key: 'morning', label: 'Morning', icon: 'sun' },
-  { key: 'general', label: 'During the day', icon: 'star' },
+  { key: 'general', label: 'During the day', icon: 'daytime' },
   { key: 'evening', label: 'Evening', icon: 'moon' },
 ];

@@ -1,4 +1,4 @@
-import { Check, ChevronLeft, ClipboardList, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { CalendarClock, Check, ChevronLeft, ClipboardList, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { AppLayout } from '../components/AppLayout';
@@ -9,36 +9,47 @@ import { useSession } from '../lib/session';
 type ParentTask = {
   id: string;
   text: string;
-  day: string;
+  day: string; // start date
+  due_date: string | null;
   done: boolean;
+  done_at: string | null;
   assigned_to: string | null;
   created_by: string | null;
 };
 type Filter = 'today' | 'open';
+type Patch = Partial<{ text: string; done: boolean; day: string; dueDate: string | null }>;
+
+const mdy = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(0, 4)}`;
+const localDay = (ts: string) => {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 export default function ParentsTasks() {
   const { me } = useSession();
   const canEdit = me?.member?.role === 'parent';
   const parents = (me?.members ?? []).filter((m) => m.role === 'parent');
   const nameOf = (id: string | null) => parents.find((p) => p.id === id)?.name;
+  const todayIso = today();
 
   const [filter, setFilter] = useState<Filter>('today');
   const [tasks, setTasks] = useState<ParentTask[] | null>(null);
   const [text, setText] = useState('');
   const [assignee, setAssignee] = useState('');
+  const [start, setStart] = useState(todayIso);
+  const [due, setDue] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const day = today();
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const q = filter === 'open' ? 'filter=open' : `day=${day}`;
+      const q = filter === 'open' ? 'filter=open' : `day=${todayIso}`;
       setTasks((await api<{ tasks: ParentTask[] }>(`/parent-tasks?${q}`)).tasks);
     } catch (e) {
       setError((e as Error).message);
     }
-  }, [filter, day]);
+  }, [filter, todayIso]);
 
   useEffect(() => {
     load();
@@ -47,14 +58,15 @@ export default function ParentsTasks() {
   async function add(e: FormEvent) {
     e.preventDefault();
     if (!text.trim()) return;
+    if (due && due < start) return setError('The due date can’t be before the start date');
     setBusy(true);
     setError(null);
     try {
-      const { task } = await api<{ task: ParentTask }>('/parent-tasks', {
-        body: { text, day, assignedTo: assignee || null },
-      });
-      setTasks((list) => [...(list ?? []), task]);
+      await api<{ task: ParentTask }>('/parent-tasks', { body: { text, day: start, dueDate: due || null, assignedTo: assignee || null } });
       setText('');
+      setDue('');
+      setStart(todayIso);
+      await load();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -62,7 +74,7 @@ export default function ParentsTasks() {
     }
   }
 
-  async function patch(id: string, body: Partial<{ text: string; done: boolean }>) {
+  async function patch(id: string, body: Patch) {
     setError(null);
     try {
       const { task } = await api<{ task: ParentTask }>(`/parent-tasks/${id}`, { method: 'PATCH', body });
@@ -82,7 +94,9 @@ export default function ParentsTasks() {
     }
   }
 
-  const doneCount = tasks?.filter((t) => t.done).length ?? 0;
+  // Today: started and not done, plus anything finished today (in this browser's time zone)
+  const visible = (tasks ?? []).filter((t) => filter === 'open' || !t.done || (t.done_at && localDay(t.done_at) === todayIso));
+  const doneCount = visible.filter((t) => t.done).length;
 
   return (
     <AppLayout title="Parents Tasks" icon={<ClipboardList className="text-violet" />}>
@@ -110,19 +124,32 @@ export default function ParentsTasks() {
                 }
               }}
             />
-            <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-              {parents.length > 1 && (
-                <select className="input !text-xl sm:w-64" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
-                  <option value="">Anyone</option>
-                  {parents.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      For {p.name}
-                    </option>
-                  ))}
-                </select>
+            <div className="mt-3 grid gap-3 sm:grid-cols-[auto_auto_1fr_auto] sm:items-end">
+              <label>
+                <span className="label">Start date</span>
+                <input type="date" className="input !text-xl" value={start} onChange={(e) => e.target.value && setStart(e.target.value)} />
+              </label>
+              <label>
+                <span className="label">Due date (optional)</span>
+                <input type="date" className="input !text-xl" value={due} min={start} onChange={(e) => setDue(e.target.value)} />
+              </label>
+              {parents.length > 1 ? (
+                <label>
+                  <span className="label">For</span>
+                  <select className="input !text-xl" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
+                    <option value="">Anyone</option>
+                    {parents.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <span />
               )}
-              <button className="btn btn-primary px-8 py-4 !text-2xl sm:ml-auto" disabled={busy || !text.trim()}>
-                <Plus size={20} /> Add
+              <button className="btn btn-primary px-8 py-4 !text-2xl" disabled={busy || !text.trim()}>
+                <Plus size={22} /> Add
               </button>
             </div>
           </form>
@@ -140,9 +167,9 @@ export default function ParentsTasks() {
               </button>
             ))}
           </div>
-          {tasks && tasks.length > 0 && (
+          {visible.length > 0 && filter === 'today' && (
             <span className="text-xl font-bold text-muted">
-              {doneCount}/{tasks.length} done
+              {doneCount}/{visible.length} done
             </span>
           )}
         </div>
@@ -151,21 +178,21 @@ export default function ParentsTasks() {
 
         {!tasks ? (
           !error && <div className="py-10 text-center text-muted">Loading…</div>
-        ) : tasks.length === 0 ? (
+        ) : visible.length === 0 ? (
           <div className="rounded-2xl border-2 border-dashed border-line py-12 text-center text-2xl text-muted">
             {filter === 'today' ? 'No tasks for today yet.' : 'Nothing open. Nice work!'}
           </div>
         ) : (
           <ul className="space-y-3">
-            {tasks.map((t) => (
+            {visible.map((t) => (
               <TaskItem
                 key={t.id}
                 task={t}
+                todayIso={todayIso}
                 canEdit={canEdit}
                 assigneeName={nameOf(t.assigned_to)}
-                showDay={filter === 'open' && t.day !== day}
                 onToggle={() => patch(t.id, { done: !t.done })}
-                onSave={(text) => patch(t.id, { text })}
+                onSave={(p) => patch(t.id, p)}
                 onDelete={() => remove(t.id)}
               />
             ))}
@@ -176,26 +203,53 @@ export default function ParentsTasks() {
   );
 }
 
+function DateChips({ task, todayIso }: { task: ParentTask; todayIso: string }) {
+  const chips: { text: string; cls: string }[] = [];
+  if (task.day > todayIso) chips.push({ text: `Starts ${mdy(task.day)}`, cls: 'bg-soft text-muted' });
+  if (task.due_date) {
+    if (!task.done && task.due_date < todayIso) chips.push({ text: `Overdue · was due ${mdy(task.due_date)}`, cls: 'bg-danger/10 text-danger' });
+    else if (!task.done && task.due_date === todayIso) chips.push({ text: 'Due today', cls: 'bg-amber-100 text-amber-800' });
+    else chips.push({ text: `Due ${mdy(task.due_date)}`, cls: 'bg-soft text-ink' });
+  }
+  return (
+    <>
+      {chips.map((c) => (
+        <span key={c.text} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-bold ${c.cls}`}>
+          <CalendarClock size={16} /> {c.text}
+        </span>
+      ))}
+    </>
+  );
+}
+
 function TaskItem({
   task,
+  todayIso,
   canEdit,
   assigneeName,
-  showDay,
   onToggle,
   onSave,
   onDelete,
 }: {
   task: ParentTask;
+  todayIso: string;
   canEdit: boolean;
   assigneeName?: string;
-  showDay: boolean;
   onToggle: () => void;
-  onSave: (text: string) => void;
+  onSave: (p: Patch) => void;
   onDelete: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(task.text);
-  const [mm, dd, yyyy] = [task.day.slice(5, 7), task.day.slice(8, 10), task.day.slice(0, 4)];
+  const [start, setStart] = useState(task.day);
+  const [due, setDue] = useState(task.due_date ?? '');
+
+  function cancel() {
+    setDraft(task.text);
+    setStart(task.day);
+    setDue(task.due_date ?? '');
+    setEditing(false);
+  }
 
   return (
     <li className={`flex items-start gap-4 rounded-2xl border-2 p-4 transition ${task.done ? 'border-line bg-soft' : 'border-violet-soft bg-white'}`}>
@@ -203,35 +257,37 @@ function TaskItem({
         aria-label={task.done ? 'Mark as not done' : 'Mark as done'}
         disabled={!canEdit}
         onClick={onToggle}
-        className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border-[3px] transition ${
-          task.done ? 'border-violet bg-violet' : 'border-violet bg-white'
-        }`}
+        className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border-[3px] transition ${task.done ? 'border-violet bg-violet' : 'border-violet bg-white'}`}
       >
         {task.done && <Check size={28} strokeWidth={4} className="text-white" />}
       </button>
 
       <div className="min-w-0 flex-1">
         {editing ? (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             <textarea className="input min-h-[90px] !text-2xl" value={draft} maxLength={500} onChange={(e) => setDraft(e.target.value)} autoFocus />
+            <div className="flex flex-wrap gap-3">
+              <label>
+                <span className="label">Start date</span>
+                <input type="date" className="input !text-lg" value={start} onChange={(e) => e.target.value && setStart(e.target.value)} />
+              </label>
+              <label>
+                <span className="label">Due date</span>
+                <input type="date" className="input !text-lg" value={due} min={start} onChange={(e) => setDue(e.target.value)} />
+              </label>
+            </div>
             <div className="flex gap-2">
               <button
                 className="btn btn-primary py-2"
-                disabled={!draft.trim()}
+                disabled={!draft.trim() || (Boolean(due) && due < start)}
                 onClick={() => {
-                  onSave(draft);
+                  onSave({ text: draft, day: start, dueDate: due || null });
                   setEditing(false);
                 }}
               >
                 Save
               </button>
-              <button
-                className="btn btn-ghost py-2"
-                onClick={() => {
-                  setDraft(task.text);
-                  setEditing(false);
-                }}
-              >
+              <button className="btn btn-ghost py-2" onClick={cancel}>
                 <X size={18} /> Cancel
               </button>
             </div>
@@ -239,12 +295,10 @@ function TaskItem({
         ) : (
           <>
             <p className={`whitespace-pre-wrap break-words text-2xl font-semibold ${task.done ? 'text-muted line-through' : ''}`}>{task.text}</p>
-            {(assigneeName || showDay) && (
-              <div className="mt-1 flex flex-wrap gap-2 text-base">
-                {assigneeName && <span className="rounded-full bg-violet-soft px-2 py-0.5 font-bold text-violet">{assigneeName}</span>}
-                {showDay && <span className="text-muted">{`${mm}-${dd}-${yyyy}`}</span>}
-              </div>
-            )}
+            <div className="mt-1.5 flex flex-wrap gap-2 text-base">
+              {assigneeName && <span className="rounded-full bg-violet-soft px-2.5 py-0.5 font-bold text-violet">{assigneeName}</span>}
+              <DateChips task={task} todayIso={todayIso} />
+            </div>
           </>
         )}
       </div>

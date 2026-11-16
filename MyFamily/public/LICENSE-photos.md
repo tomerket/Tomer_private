@@ -8,12 +8,10 @@ Task photos live in `task-photos/`, the sample family photo is `default-family.j
 | toothbrush | [File:Toothbrush, Toothpaste, Dental Care (571741).jpg](https://commons.wikimedia.org/wiki/File:Toothbrush,_Toothpaste,_Dental_Care_(571741).jpg) | CC0 | Steve Buissinne, South Africa |
 | tooth | [File:Toothbrush, Toothpaste, Dental Care (571741) (cropped).jpg](https://commons.wikimedia.org/wiki/File:Toothbrush,_Toothpaste,_Dental_Care_(571741)_(cropped).jpg) | CC0 | Steve Buissinne, South Africa |
 | bed | [File:Hotel room bedroom in building on Chapel Street, Salford, Greater Manchester, England, on 5 October 2025.jpg](https://commons.wikimedia.org/wiki/File:Hotel_room_bedroom_in_building_on_Chapel_Street,_Salford,_Greater_Manchester,_England,_on_5_October_2025.jpg) | CC0 | MatthewHoobin |
-| tshirt | [File:Sports T-Shirt.png](https://commons.wikimedia.org/wiki/File:Sports_T-Shirt.png) | CC0 | Kuttos2 |
 | socks | [File:Villased sokid, STM 1998.jpg](https://commons.wikimedia.org/wiki/File:Villased_sokid,_STM_1998.jpg) | CC0 | Venemaa; Petseri rajoon, Põrste küla; valmistaja: Helü, Linda; fotograaf: Tuul,  |
 | shoe | [File:Spoon on Sneakers in 1980s.jpg](https://commons.wikimedia.org/wiki/File:Spoon_on_Sneakers_in_1980s.jpg) | CC0 | Researcher for Spoon on Sneakers, who is my friend. |
 | milk | [File:Milk bottle and two doughnuts.jpg](https://commons.wikimedia.org/wiki/File:Milk_bottle_and_two_doughnuts.jpg) | CC0 | www.Pixel.la Free Stock Photos |
 | plate | [File:Elegant dinner table (Unsplash).jpg](https://commons.wikimedia.org/wiki/File:Elegant_dinner_table_(Unsplash).jpg) | CC0 | Annie Spratt anniespratt |
-| backpack | [File:Boy-in-brown-hoodie-carrying-red-backpack-while-walking-on-207697.jpg](https://commons.wikimedia.org/wiki/File:Boy-in-brown-hoodie-carrying-red-backpack-while-walking-on-207697.jpg) | CC0 | ambermb |
 | puzzle | [File:Puzzle (Unsplash).jpg](https://commons.wikimedia.org/wiki/File:Puzzle_(Unsplash).jpg) | CC0 | Hans-Peter Gauster sloppyperfectionist |
 | music | [File:Piano Close-up of Tiled Floor.jpg](https://commons.wikimedia.org/wiki/File:Piano_Close-up_of_Tiled_Floor.jpg) | CC0 | Unknown authorUnknown author |
 | ball | [File:Soccer ball on ground.jpg](https://commons.wikimedia.org/wiki/File:Soccer_ball_on_ground.jpg) | CC0 | Petey21 |
@@ -32,9 +30,7 @@ Task photos live in `task-photos/`, the sample family photo is `default-family.j
 | heart | [File:Heart-dynamic-color.png](https://commons.wikimedia.org/wiki/File:Heart-dynamic-color.png) | CC0 | Vijay Verma |
 | apple | [File:Apple15112024.jpg](https://commons.wikimedia.org/wiki/File:Apple15112024.jpg) | CC0 | mali maeder |
 | school | [File:Pexels-pixabay-256395.jpg](https://commons.wikimedia.org/wiki/File:Pexels-pixabay-256395.jpg) | CC0 | Pixabay |
-| pencil | [File:Pexels-pixabay-50996.jpg](https://commons.wikimedia.org/wiki/File:Pexels-pixabay-50996.jpg) | CC0 | 422737 |
 | books | [File:Stack of multicolored books on a table.jpg](https://commons.wikimedia.org/wiki/File:Stack_of_multicolored_books_on_a_table.jpg) | CC0 | Alexander Grey |
-| openbook | [File:Pexels-pixabay-159866.jpg](https://commons.wikimedia.org/wiki/File:Pexels-pixabay-159866.jpg) | CC0 | congerdesign |
 | laptop | [File:Laptop Programmcode.jpg](https://commons.wikimedia.org/wiki/File:Laptop_Programmcode.jpg) | CC0 | Negative Space |
 | breakfast | [20210902-FNS-UNC-0042](https://www.flickr.com/photos/41284017@N08/51429943717) | pdm | USDAgov |
 | sandwich | [Fish sandwich](https://www.flickr.com/photos/57873306@N00/7346865110) | pdm | Kim Siever |
@@ -42,3 +38,11 @@ Task photos live in `task-photos/`, the sample family photo is `default-family.j
 | palette | [Color brushes](https://www.flickr.com/photos/148714304@N03/36910578426) | cc0 | ky0nch3ng |
 | bike | [The Red Bicycle.](https://www.flickr.com/photos/88123769@N02/15655615295) | cc0 | Bernard Spragg |
 | default-family | [File:Family watching beach sunset (Unsplash).jpg](https://commons.wikimedia.org/wiki/File:Family_watching_beach_sunset_(Unsplash).jpg) | CC0 | David Straight davidstraight |
+| backpack | [File:Wenger backpack.jpg](https://commons.wikimedia.org/wiki/File:Wenger_backpack.jpg) | CC0 | Sir Tragedy |
+| moon | [File:Full moon in Sagittarius-cropped.jpg](https://commons.wikimedia.org/wiki/File:Full_moon_in_Sagittarius-cropped.jpg) | CC0 | José Lodos Benavente |
+| cleaning | [File:Mop bucket in gas station bathroom.jpg](https://commons.wikimedia.org/wiki/File:Mop_bucket_in_gas_station_bathroom.jpg) | CC0 | Ser Amantio di Nicolao |
+| pencil | [File:Taking notes with a pencil (Unsplash).jpg](https://commons.wikimedia.org/wiki/File:Taking_notes_with_a_pencil_(Unsplash).jpg) | CC0 | Thought Catalog thoughtcatalog |
+| openbook | [File:Babies with soft books.jpg](https://commons.wikimedia.org/wiki/File:Babies_with_soft_books.jpg) | CC0 | https://pixabay.com/en/users/2081671-2081671/ |
+| daytime | [File:Blue sky and sun.png](https://commons.wikimedia.org/wiki/File:Blue_sky_and_sun.png) | CC0 | Matt R |
+| tshirt | [File:Jeff Sheldon 2014-11-18 (Unsplash Lj1S1 KD61k).jpg](https://commons.wikimedia.org/wiki/File:Jeff_Sheldon_2014-11-18_(Unsplash_Lj1S1_KD61k).jpg) | CC0 | Jeff Sheldon ugmonk |
+| pajamas | [File:Nachtjapon, objectnr KA 14370.tif](https://commons.wikimedia.org/wiki/File:Nachtjapon,_objectnr_KA_14370.tif) | CC0 | Amsterdam Museum |
