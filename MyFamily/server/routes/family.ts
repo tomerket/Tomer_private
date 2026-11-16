@@ -55,6 +55,21 @@ familyRouter.post(
   }),
 );
 
+/** Remove the family photo (Home then shows the sample photo). Admin only. */
+familyRouter.delete(
+  '/family/photo',
+  requireCaller,
+  handle(async (req, res) => {
+    const me = memberOf(req);
+    if (req.caller!.kind !== 'admin' || !me.is_admin) throw new HttpError(403, 'Only the family admin can change the photo');
+    const { data: family } = await db().from('families').select('photo_path').eq('id', me.family_id).single();
+    const { error } = await db().from('families').update({ photo_path: null }).eq('id', me.family_id);
+    if (error) throw error;
+    if (family?.photo_path) await db().storage.from(PHOTO_BUCKET).remove([family.photo_path]);
+    res.json({ ok: true });
+  }),
+);
+
 const PHOTO_TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 
 /** Upload / replace the family photo. Body is the raw image bytes. Admin only. */

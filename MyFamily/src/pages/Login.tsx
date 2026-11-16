@@ -3,15 +3,32 @@ import { Link, useNavigate } from 'react-router-dom';
 import { BirthdayInput, isValidBirthday } from '../components/BirthdayInput';
 import { AuthShell, ErrorBox } from '../components/ui';
 import { api } from '../lib/api';
-import { useSession } from '../lib/session';
+import { IDLE_FLAG_KEY, IDLE_MINUTES, useSession } from '../lib/session';
 import { supabase } from '../lib/supabase';
 
 type Tab = 'member' | 'admin';
 
+/** True once if the user was just signed out for being idle. */
+function takeIdleFlag(): boolean {
+  try {
+    const v = sessionStorage.getItem(IDLE_FLAG_KEY) === '1';
+    sessionStorage.removeItem(IDLE_FLAG_KEY);
+    return v;
+  } catch {
+    return false;
+  }
+}
+
 export default function Login() {
   const [tab, setTab] = useState<Tab>('member');
+  const [idle] = useState(takeIdleFlag);
   return (
     <AuthShell title="Welcome back" subtitle="Sign in to your family">
+      {idle && (
+        <div role="status" className="mb-5 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 font-semibold text-amber-900">
+          You were logged out after {IDLE_MINUTES} minutes without activity. Please sign in again.
+        </div>
+      )}
       {tab === 'member' && (
         <div className="mb-5 rounded-xl border-2 border-violet-soft bg-violet-soft/50 px-4 py-3 text-ink">
           <b>First time here?</b> The family admin needs to{' '}

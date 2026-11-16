@@ -1,4 +1,4 @@
-import { Camera } from 'lucide-react';
+import { Camera, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { AppLayout } from '../components/AppLayout';
 import { api } from '../lib/api';
@@ -30,6 +30,20 @@ export default function Home() {
     }
   }
 
+  async function removePhoto() {
+    if (!window.confirm('Remove the family photo? A sample photo will be shown until you add a new one.')) return;
+    setError(null);
+    setBusy(true);
+    try {
+      await api('/family/photo', { method: 'DELETE' });
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <AppLayout title="Home" flush>
       <div className="flex flex-1 flex-col px-4 pb-4 pt-4 sm:px-8 sm:pt-6">
@@ -40,11 +54,19 @@ export default function Home() {
             <h1 className="text-4xl font-extrabold uppercase leading-none tracking-wide sm:text-6xl">The {me.family.family_name} Family</h1>
           </div>
           {isAdmin && (
-            <label className="btn btn-primary ml-auto shrink-0 cursor-pointer px-3 py-2 shadow">
-              <Camera size={20} />
-              <span className="hidden sm:inline">{busy ? 'Uploading…' : hasPhoto ? 'Change photo' : 'Add your photo'}</span>
-              <input type="file" accept="image/*" className="hidden" disabled={busy} onChange={(e) => changePhoto(e.target.files?.[0])} />
-            </label>
+            <div className="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
+              <label className="btn btn-primary cursor-pointer px-3 py-2 shadow">
+                <Camera size={20} />
+                <span className="hidden sm:inline">{busy ? 'Saving…' : hasPhoto ? 'Change photo' : 'Add your photo'}</span>
+                <input type="file" accept="image/*" className="hidden" disabled={busy} onChange={(e) => changePhoto(e.target.files?.[0])} />
+              </label>
+              {hasPhoto && (
+                <button className="btn btn-ghost px-3 py-2 text-danger" disabled={busy} onClick={removePhoto} title="Remove photo">
+                  <Trash2 size={20} />
+                  <span className="hidden sm:inline">Remove photo</span>
+                </button>
+              )}
+            </div>
           )}
         </div>
         {error && <p className="mt-2 rounded-lg bg-danger/10 px-3 py-1 font-semibold text-danger">{error}</p>}
