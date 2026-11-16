@@ -12,13 +12,15 @@ export default function Login() {
   const [tab, setTab] = useState<Tab>('member');
   return (
     <AuthShell title="Welcome back" subtitle="Sign in to your family">
-      <div className="mb-5 rounded-xl border-2 border-violet-soft bg-violet-soft/50 px-4 py-3 text-ink">
-        <b>First time here?</b> The family admin needs to{' '}
-        <Link to="/register" className="font-bold text-violet underline">
-          register
-        </Link>{' '}
-        and set up the family first. After that, family members can sign in.
-      </div>
+      {tab === 'member' && (
+        <div className="mb-5 rounded-xl border-2 border-violet-soft bg-violet-soft/50 px-4 py-3 text-ink">
+          <b>First time here?</b> The family admin needs to{' '}
+          <Link to="/register" className="font-bold text-violet underline">
+            register
+          </Link>{' '}
+          and set up the family first. After that, family members can sign in.
+        </div>
+      )}
       <div className="mb-6 grid grid-cols-2 gap-1 rounded-xl bg-soft p-1">
         {(['member', 'admin'] as Tab[]).map((t) => (
           <button
