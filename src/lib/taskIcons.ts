@@ -51,8 +51,18 @@ export const TASK_ICONS: { key: string; label: string }[] = [
 
 const KEYS = new Set(TASK_ICONS.map((i) => i.key));
 
+// Real photos (public domain / CC0, see public/LICENSE-photos.md) in public/task-photos/<key>.jpg.
+// Keys without a photo fall back to the 3D picture in public/task-icons/<key>.png.
+const PHOTOS = new Set([
+  'alarm', 'apple', 'backpack', 'ball', 'basket', 'bed', 'bike', 'books', 'breakfast', 'broom', 'cat', 'dog',
+  'droplet', 'heart', 'laptop', 'lotion', 'milk', 'music', 'openbook', 'palette', 'pencil', 'pill', 'plant',
+  'plate', 'puzzle', 'sandwich', 'school', 'shoe', 'socks', 'sun', 'teddy', 'toilet', 'tooth', 'toothbrush',
+  'trash', 'tshirt',
+]);
+
 /** URL for a task picture, or null if the key isn't a known picture (e.g. an old emoji). */
 export function taskIconUrl(key: string): string | null {
+  if (PHOTOS.has(key)) return `/task-photos/${key}.jpg`;
   return KEYS.has(key) ? `/task-icons/${key}.png` : null;
 }
 
