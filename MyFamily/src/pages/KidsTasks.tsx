@@ -15,9 +15,9 @@ const DAYS_BACK = 5;
 
 /** Section look: background, heading color and tile accent. */
 export const SECTION_STYLE: Record<Period, { bg: string; heading: string; accent: string }> = {
-  morning: { bg: 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)', heading: '#92400E', accent: '#F59E0B' },
-  general: { bg: 'linear-gradient(135deg, #E0F2FE 0%, #CCFBF1 100%)', heading: '#075985', accent: '#0EA5E9' },
-  evening: { bg: 'linear-gradient(135deg, #312E81 0%, #1E1B4B 100%)', heading: '#FFFFFF', accent: '#8B5CF6' },
+  morning: { bg: '#FFF3D1', heading: '#8A5200', accent: '#6D3BF5' },
+  general: { bg: '#E2F6FC', heading: '#0B5E7A', accent: '#6D3BF5' },
+  evening: { bg: '#2A1F66', heading: '#FFFFFF', accent: '#6D3BF5' },
 };
 
 export function TaskPicture({ icon, className }: { icon: string; className?: string }) {
@@ -37,9 +37,9 @@ function addDays(iso: string, n: number) {
 function dayLabel(iso: string, todayIso: string) {
   const d = new Date(`${iso}T00:00:00`);
   const md = `${iso.slice(5, 7)}/${iso.slice(8, 10)}`;
-  if (iso === todayIso) return `Today · ${md}`;
-  if (iso === addDays(todayIso, -1)) return `Yesterday · ${md}`;
-  return `${d.toLocaleDateString('en-US', { weekday: 'long' })} · ${md}`;
+  if (iso === todayIso) return `Today, ${md}`;
+  if (iso === addDays(todayIso, -1)) return `Yesterday, ${md}`;
+  return `${d.toLocaleDateString("en-US", { weekday: "long" })}, ${md}`;
 }
 
 export default function KidsTasks() {
@@ -127,12 +127,12 @@ export default function KidsTasks() {
             </button>
           ))}
         <button
-          className="btn ml-auto bg-amber-100 px-4 py-2.5 text-amber-900 hover:bg-amber-200"
+          className="btn ml-auto bg-sun-soft px-4 py-2.5 text-sun-ink hover:bg-sun"
           onClick={() => setShowRewards(true)}
           disabled={kids.length === 0}
         >
           <Gift size={22} /> Rewards
-          {reached.length > 0 && <span className="rounded-full bg-amber-500 px-2 text-sm text-white">{reached.length}</span>}
+          {reached.length > 0 && <span className="rounded-full bg-sun-soft0 px-2 text-sm text-white">{reached.length}</span>}
         </button>
         <div className="flex items-center gap-1 rounded-xl bg-soft p-1">
           <button
@@ -160,36 +160,41 @@ export default function KidsTasks() {
       ) : (
         <>
           {/* Progress + reward */}
-          <div className={`mb-4 rounded-2xl px-5 py-3 ${allDone ? 'hero-gradient text-white' : 'bg-soft'}`}>
+          {/* Sticker strip: each finished task adds its own picture */}
+          <div className={`lift mb-4 rounded-[28px] px-5 py-4 ${allDone ? 'hero-gradient text-white' : 'bg-white'}`}>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              <span className="text-2xl font-extrabold sm:text-3xl">
-                {allDone ? `Amazing, ${kidName}! All done! 🎉` : `${kidName}'s tasks`}
+              <span className="text-2xl font-extrabold leading-tight sm:text-3xl">
+                {allDone
+                  ? `Amazing, ${kidName}! All done! 🎉`
+                  : nextReward
+                    ? `${kidName}, ${Math.min(nextReward.min_score, total) - done} more for ${nextReward.title}`
+                    : `${kidName}'s tasks`}
               </span>
               {!canEdit && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-0.5 text-sm font-bold text-muted">
+                <span className="inline-flex items-center gap-1 rounded-full bg-soft px-3 py-0.5 text-sm font-bold text-muted">
                   <Lock size={14} /> View only
                 </span>
               )}
-              <span className={`ml-auto text-3xl font-extrabold sm:text-4xl ${allDone ? '' : 'text-violet'}`}>
+              <span className={`ml-auto text-4xl font-extrabold tabular-nums ${allDone ? '' : 'text-violet'}`}>
                 {done}/{total}
               </span>
             </div>
-            <div className={`mt-2 h-4 overflow-hidden rounded-full ${allDone ? 'bg-white/30' : 'bg-white'}`}>
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${allDone ? 'bg-white' : 'bg-gradient-to-r from-cyan to-violet'}`}
-                style={{ width: total ? `${(done / total) * 100}%` : 0 }}
-              />
+            <div className="mt-3 flex flex-wrap gap-1.5" aria-label={`${done} of ${total} tasks done`}>
+              {(tasks ?? []).map((t) =>
+                t.checked ? (
+                  <TaskPicture
+                    key={t.id}
+                    icon={t.icon}
+                    className={`h-10 w-10 rounded-full border-[3px] bg-white ${allDone ? 'border-white' : 'border-violet'}`}
+                  />
+                ) : (
+                  <span key={t.id} title={t.title} className="h-10 w-10 rounded-full border-2 border-dashed border-line bg-soft" />
+                ),
+              )}
             </div>
-            {rewards.length > 0 && (
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-lg font-bold">
-                <Gift size={22} className={allDone ? '' : 'text-violet'} />
-                {bestReached && <span>Reward earned: {bestReached.title}! 🏆</span>}
-                {nextReward && (
-                  <span className={allDone ? '' : 'text-muted'}>
-                    {bestReached ? 'Next: ' : 'Reward: '}
-                    {nextReward.title}, {Math.min(nextReward.min_score, total) - done} more to go ({Math.min(nextReward.min_score, total)}/{total})
-                  </span>
-                )}
+            {bestReached && (
+              <div className="mt-2 flex items-center gap-2 text-lg font-bold">
+                <Gift size={22} className={allDone ? '' : 'text-sun'} /> Reward earned: {bestReached.title}! 🏆
               </div>
             )}
           </div>
@@ -207,9 +212,9 @@ export default function KidsTasks() {
                 const sDone = list.filter((t) => t.checked).length;
                 return (
                   /* One horizontal band per time of day: label on the left, tasks side by side */
-                  <section key={p.key} className="flex flex-col gap-3 rounded-3xl p-3 sm:flex-row sm:items-stretch sm:p-4" style={{ background: s.bg }}>
+                  <section key={p.key} className="flex flex-col gap-3 rounded-[28px] p-3 sm:flex-row sm:items-stretch sm:p-4" style={{ background: s.bg }}>
                     <h2
-                      className="flex shrink-0 items-center gap-2 text-xl font-extrabold uppercase tracking-wide sm:w-36 sm:flex-col sm:justify-center sm:text-center"
+                      className="flex shrink-0 items-center gap-2 text-2xl font-extrabold sm:w-36 sm:flex-col sm:justify-center sm:text-center"
                       style={{ color: s.heading }}
                     >
                       <TaskPicture icon={p.icon} className="h-10 w-10 rounded-full sm:h-14 sm:w-14" />
@@ -225,16 +230,15 @@ export default function KidsTasks() {
                           onClick={() => toggle(t)}
                           aria-pressed={t.checked}
                           disabled={!canEdit}
-                          className="relative flex w-36 shrink-0 flex-col items-center gap-1.5 rounded-2xl border-[3px] bg-white p-2.5 text-center shadow-sm transition active:scale-[0.97] disabled:cursor-default sm:w-auto"
-                          style={{ borderColor: t.checked ? s.accent : 'transparent' }}
+                          className={`relative flex w-36 shrink-0 flex-col items-center gap-1.5 rounded-[20px] border-2 bg-white p-2.5 text-center transition active:scale-[0.97] disabled:cursor-default sm:w-auto ${
+                            t.checked ? 'lift border-violet' : 'border-line'
+                          }`}
                         >
-                          <TaskPicture icon={t.icon} className={`h-16 w-16 rounded-xl transition ${t.checked ? 'opacity-50' : ''}`} />
-                          <span className={`text-lg font-bold leading-tight ${t.checked ? 'text-muted' : ''}`}>{t.title}</span>
-                          <span
-                            className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-lg border-[3px] transition"
-                            style={{ borderColor: s.accent, background: t.checked ? s.accent : '#fff' }}
-                          >
-                            {t.checked && <Check size={20} strokeWidth={4} className="text-white" />}
+                          <TaskPicture icon={t.icon} className={`h-16 w-16 rounded-2xl transition ${t.checked ? 'opacity-55' : ''}`} />
+                          <span className={`font-display text-lg font-bold leading-tight ${t.checked ? 'text-muted' : ''}`}>{t.title}</span>
+                          {/* The stamp */}
+                          <span className="stamp absolute right-1.5 top-1.5 h-9 w-9" data-on={t.checked}>
+                            {t.checked && <Check size={18} strokeWidth={4} className="text-white" />}
                           </span>
                         </button>
                       ))}
@@ -271,7 +275,7 @@ function RewardsDialog({
       <div className="panel w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-2xl font-extrabold">
-            <Gift className="text-amber-500" /> {kidName}'s rewards
+            <Gift className="text-sun" /> {kidName}'s rewards
           </h2>
           <button aria-label="Close" className="p-1 text-muted" onClick={onClose}>
             <X />
@@ -288,15 +292,15 @@ function RewardsDialog({
               const need = Math.min(r.min_score, total);
               const earned = total > 0 && done >= need;
               return (
-                <li key={r.id} className={`flex items-center gap-3 rounded-2xl border-2 p-3 ${earned ? 'border-amber-400 bg-amber-50' : 'border-line'}`}>
-                  <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${earned ? 'bg-amber-400 text-white' : 'bg-soft text-muted'}`}>
+                <li key={r.id} className={`flex items-center gap-3 rounded-2xl border-2 p-3 ${earned ? 'border-sun bg-sun-soft' : 'border-line'}`}>
+                  <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${earned ? 'bg-sun text-white' : 'bg-soft text-muted'}`}>
                     {earned ? <Trophy size={22} /> : <Gift size={22} />}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="text-lg font-extrabold">{r.title}</div>
                     <div className="text-muted">Needs {r.min_score} tasks a day</div>
                   </div>
-                  <span className={`shrink-0 text-right font-extrabold ${earned ? 'text-amber-700' : 'text-muted'}`}>
+                  <span className={`shrink-0 text-right font-extrabold ${earned ? 'text-sun-ink' : 'text-muted'}`}>
                     {earned ? 'Earned! 🏆' : `${need - done} more`}
                   </span>
                 </li>

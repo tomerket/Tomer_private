@@ -108,7 +108,7 @@ export default function Dashboard() {
             <label>
               <span className="label">Dates</span>
               <select
-                className="input !w-auto !py-2 font-bold"
+                className="input filter-box"
                 value={range}
                 onChange={(e) => {
                   const v = e.target.value;
@@ -132,11 +132,11 @@ export default function Dashboard() {
               <div className="flex items-end gap-2">
                 <label>
                   <span className="label">From</span>
-                  <input type="date" className="input !w-auto !py-2" value={from} max={to} onChange={(e) => e.target.value && setFrom(e.target.value)} />
+                  <input type="date" className="input filter-box" value={from} max={to} onChange={(e) => e.target.value && setFrom(e.target.value)} />
                 </label>
                 <label>
                   <span className="label">To</span>
-                  <input type="date" className="input !w-auto !py-2" value={to} min={from} max={t} onChange={(e) => e.target.value && setTo(e.target.value)} />
+                  <input type="date" className="input filter-box" value={to} min={from} max={t} onChange={(e) => e.target.value && setTo(e.target.value)} />
                 </label>
               </div>
             )}
@@ -180,7 +180,7 @@ export default function Dashboard() {
 function StatTile({ label, value, sub }: { label: string; value: string; sub: string }) {
   return (
     <div className="rounded-2xl bg-soft p-4">
-      <div className="text-sm font-bold uppercase tracking-widest text-muted">{label}</div>
+      <div className="text-sm font-bold text-muted">{label}</div>
       <div className="mt-1 text-4xl font-extrabold text-ink">{value}</div>
       <div className="text-muted">{sub}</div>
     </div>
@@ -325,11 +325,11 @@ function RewardsSummary({ stats }: { stats: KidStats[] }) {
   return (
     <section>
       <h3 className="mb-3 flex items-center gap-2 text-xl font-extrabold">
-        <Gift className="text-amber-500" /> Rewards
+        <Gift className="text-sun" /> Rewards
       </h3>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {stats.map((k) => (
-          <div key={k.id} className="rounded-2xl border-2 border-amber-200 bg-amber-50/60 p-4">
+          <div key={k.id} className="rounded-2xl border-2 border-sun/40 bg-sun-soft p-4">
             <div className="mb-2 flex items-center gap-2 text-lg font-extrabold">
               <Avatar name={k.name} photoUrl={photo(k.id)} role="kid" size={34} /> {k.name}
             </div>
@@ -339,9 +339,9 @@ function RewardsSummary({ stats }: { stats: KidStats[] }) {
               <ul className="space-y-1.5">
                 {k.rewards.map((r) => (
                   <li key={r.id} className="flex items-center gap-2">
-                    <Trophy size={18} className={r.earnedDays ? 'text-amber-500' : 'text-muted'} />
+                    <Trophy size={18} className={r.earnedDays ? 'text-sun' : 'text-muted'} />
                     <span className="min-w-0 flex-1">
-                      <span className="font-bold">{r.title}</span> <span className="text-sm text-muted">· {r.min_score} tasks/day</span>
+                      <span className="font-bold">{r.title}</span> <span className="text-sm text-muted">({r.min_score} tasks a day)</span>
                     </span>
                     <span className="whitespace-nowrap font-extrabold text-ink">
                       earned {r.earnedDays}/{k.summary.trackedDays} days
@@ -391,7 +391,7 @@ function KidsDropdown({
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="input flex !w-auto min-w-[200px] max-w-[320px] items-center gap-2 !py-2 text-left font-bold"
+        className="input filter-box flex items-center gap-2 text-left"
       >
         <span className="truncate">{label}</span>
         <ChevronDown size={18} className="ml-auto shrink-0 text-muted" />
@@ -472,7 +472,7 @@ function TaskPercent({
               return (
                 <tbody key={p.key}>
                   <tr>
-                    <td colSpan={stats.length + 1} className="px-4 py-1.5 text-base font-extrabold uppercase tracking-wide" style={{ background: s.bg, color: s.heading }}>
+                    <td colSpan={stats.length + 1} className="px-4 py-1.5 text-base font-extrabold" style={{ background: s.bg, color: s.heading }}>
                       <span className="inline-flex items-center gap-2">
                         <TaskPicture icon={p.icon} className="h-7 w-7 rounded-full" /> {p.label}
                       </span>

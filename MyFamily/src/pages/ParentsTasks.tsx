@@ -214,7 +214,7 @@ function status(task: ParentTask, todayIso: string): { text: string; cls: string
   if (task.done) return { text: task.done_at ? `Done ${mdy(localDay(task.done_at))}` : 'Done', cls: 'bg-success/10 text-success' };
   if (task.day > todayIso) return { text: 'Not started yet', cls: 'bg-soft text-muted' };
   if (task.due_date < todayIso) return { text: 'Overdue', cls: 'bg-danger/10 text-danger' };
-  if (task.due_date === todayIso) return { text: 'Ends today', cls: 'bg-amber-100 text-amber-800' };
+  if (task.due_date === todayIso) return { text: 'Ends today', cls: 'bg-sun-soft text-sun-ink' };
   return { text: 'In progress', cls: 'bg-violet-soft text-violet' };
 }
 

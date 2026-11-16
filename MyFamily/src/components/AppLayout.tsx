@@ -35,8 +35,8 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           end={end}
           onClick={onNavigate}
           className={({ isActive }) =>
-            `flex items-center gap-3 rounded-xl px-3 py-3 text-lg font-bold transition ${
-              isActive ? 'bg-violet text-white shadow' : 'text-ink hover:bg-violet-soft'
+            `flex items-center gap-3 rounded-full px-4 py-3 text-lg font-bold transition ${
+              isActive ? 'bg-violet text-white lift' : 'text-ink hover:bg-violet-soft'
             }`
           }
         >
@@ -44,19 +44,19 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           {label}
         </NavLink>
       ))}
-      <div className="mt-4 px-3 text-xs font-bold uppercase tracking-widest text-muted">Coming soon</div>
+      <div className="mt-5 px-4 text-sm font-semibold text-muted">Coming soon</div>
       {SOON.map(({ label, icon: Icon }) => (
-        <div key={label} className="flex items-center gap-3 rounded-xl px-3 py-3 text-lg font-bold text-muted/60">
+        <div key={label} className="flex items-center gap-3 px-4 py-2.5 text-lg font-semibold text-muted/60">
           <Icon size={22} />
           {label}
         </div>
       ))}
 
-      <div className="mt-auto rounded-xl bg-soft p-3">
+      <div className="mt-auto rounded-[20px] bg-soft p-3">
         <div className="text-sm text-muted">Signed in as</div>
         <div className="text-lg font-extrabold">
           {me?.member?.name}
-          <span className="ml-2 rounded-full bg-violet-soft px-2 py-0.5 text-xs font-bold uppercase text-violet">
+          <span className="ml-2 rounded-full bg-violet-soft px-2 py-0.5 text-xs font-bold text-violet">
             {isAdmin ? 'Admin' : me?.member?.role}
           </span>
         </div>
@@ -81,8 +81,8 @@ function TodayBadge() {
   const weekday = now.toLocaleDateString('en-US', { weekday: 'short' });
   const md = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
   return (
-    <div className="ml-auto flex flex-col items-center rounded-xl bg-violet-soft px-3 py-1 leading-tight text-violet" title={now.toDateString()}>
-      <span className="text-xs font-bold uppercase tracking-widest">{weekday}</span>
+    <div className="ml-auto flex flex-col items-center rounded-2xl bg-white/20 px-3 py-1 leading-tight text-white" title={now.toDateString()}>
+      <span className="text-sm font-semibold">{weekday}</span>
       <span className="text-xl font-extrabold">{md}</span>
     </div>
   );
@@ -125,15 +125,15 @@ export function AppLayout({
       )}
 
       <main className="flex min-h-dvh min-w-0 flex-1 flex-col md:min-h-0">
-        <header className="flex items-center gap-3 px-4 py-3 text-white md:hidden">
+        <header className="hero-gradient flex items-center gap-3 px-4 py-3 text-white md:hidden">
           <button aria-label="Open menu" className="rounded-xl bg-white/20 p-2" onClick={() => setOpen(true)}>
             <Menu />
           </button>
-          <span className="text-xl font-extrabold">MyFamily</span>
+          <span className="text-2xl font-extrabold">MyFamily</span>
         </header>
-        <div className="panel mx-3 mb-3 flex flex-1 flex-col overflow-hidden md:m-0">
+        <div className="panel mx-3 my-3 flex flex-1 flex-col overflow-hidden md:m-0">
           {!flush && (
-            <div className="flex items-center gap-3 border-b border-line px-5 py-3 text-2xl font-extrabold sm:px-7">
+            <div className="hero-gradient flex items-center gap-3 px-5 py-3 text-3xl font-extrabold text-white sm:px-7 [&_svg]:text-white!">
               {icon}
               {title}
               <TodayBadge />

@@ -65,6 +65,7 @@ const PHOTOS = new Set([
 
 /** URL for a task picture, or null if the key isn't a known picture (e.g. an old emoji). */
 export function taskIconUrl(key: string): string | null {
+  if (key.startsWith('https://')) return key; // a photo the family uploaded
   if (PHOTOS.has(key)) return `/task-photos/${key}.jpg`;
   return KEYS.has(key) ? `/task-icons/${key}.png` : null;
 }

@@ -5,6 +5,7 @@ import './index.css';
 import { Spinner } from './components/ui';
 import { SessionProvider, useSession } from './lib/session';
 import Dashboard from './pages/Dashboard';
+import DesignTile from './pages/DesignTile';
 import FamilyTasks from './pages/FamilyTasks';
 import Settings from './pages/Settings';
 import Home from './pages/Home';
@@ -59,6 +60,7 @@ function App() {
       <Route path="/tasks/parents" element={<Role need="parent"><ParentsTasks /></Role>} />
       <Route path="/dashboard" element={<Role need="parent"><Dashboard /></Role>} />
       <Route path="/settings" element={<Role need="admin"><Settings /></Role>} />
+      <Route path="/design" element={<DesignTile />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

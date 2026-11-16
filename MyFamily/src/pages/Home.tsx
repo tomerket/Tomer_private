@@ -52,7 +52,7 @@ export default function Home() {
         <div className="flex items-start gap-3">
           <div className="min-w-0">
             <p className="text-xl font-semibold text-muted sm:text-2xl">Hi {me.member?.name}!</p>
-            <h1 className="text-4xl font-extrabold uppercase leading-none tracking-wide sm:text-6xl">The {me.family.family_name} Family</h1>
+            <h1 className="text-4xl font-extrabold leading-none tracking-wide sm:text-6xl">The {me.family.family_name} Family</h1>
           </div>
           {isAdmin && (
             <div className="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
@@ -81,7 +81,7 @@ export default function Home() {
           />
           {!hasPhoto && (
             <span className="absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-3 py-1 text-sm font-semibold text-muted shadow">
-              Sample photo{isAdmin ? ' · add your own family photo' : ''}
+              {isAdmin ? 'Sample photo. Add your own family photo above.' : 'Sample photo'}
             </span>
           )}
         </div>
