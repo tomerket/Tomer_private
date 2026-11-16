@@ -12,6 +12,13 @@ export default function Login() {
   const [tab, setTab] = useState<Tab>('member');
   return (
     <AuthShell title="Welcome back" subtitle="Sign in to your family">
+      <div className="mb-5 rounded-xl border-2 border-violet-soft bg-violet-soft/50 px-4 py-3 text-ink">
+        <b>First time here?</b> The family admin needs to{' '}
+        <Link to="/register" className="font-bold text-violet underline">
+          register
+        </Link>{' '}
+        and set up the family first. After that, family members can sign in.
+      </div>
       <div className="mb-6 grid grid-cols-2 gap-1 rounded-xl bg-soft p-1">
         {(['member', 'admin'] as Tab[]).map((t) => (
           <button
@@ -64,13 +71,13 @@ function MemberLogin() {
       <Field label="Family name">
         <input className="input" value={form.familyName} onChange={(e) => set('familyName')(e.target.value)} autoComplete="off" required />
       </Field>
-      <Field label="Admin name">
+      <Field label="Super user">
         <input className="input" value={form.adminName} onChange={(e) => set('adminName')(e.target.value)} autoComplete="off" required />
       </Field>
-      <Field label="Your name">
+      <Field label="Name">
         <input className="input" value={form.name} onChange={(e) => set('name')(e.target.value)} autoComplete="off" required />
       </Field>
-      <Field label="Your birthday">
+      <Field label="Birthday">
         <BirthdayInput value={form.birthday} onChange={set('birthday')} />
       </Field>
       <ErrorBox message={error} />
