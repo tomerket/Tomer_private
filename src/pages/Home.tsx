@@ -1,6 +1,7 @@
 import { Camera, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { AppLayout } from '../components/AppLayout';
+import { Avatar } from '../components/Face';
 import { api } from '../lib/api';
 import { resizeImage } from '../lib/image';
 import { useRoles, useSession } from '../lib/session';
@@ -89,13 +90,7 @@ export default function Home() {
         <div className="flex flex-nowrap justify-start gap-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none] sm:justify-center">
           {me.members.map((m) => (
             <div key={m.id} className="flex shrink-0 items-center gap-2 rounded-full bg-soft py-1 pl-1 pr-3">
-              <span
-                className={`grid h-8 w-8 place-items-center rounded-full text-base font-extrabold text-white ${
-                  m.role === 'kid' ? 'bg-cyan' : 'bg-violet'
-                }`}
-              >
-                {m.name[0]?.toUpperCase()}
-              </span>
+              <Avatar name={m.name} photoUrl={m.photoUrl} role={m.role} size={40} />
               <span className="font-bold">{m.name}</span>
               <span className="text-sm text-muted">{m.age}</span>
             </div>

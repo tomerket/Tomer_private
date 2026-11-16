@@ -1,6 +1,6 @@
-import { Router, type Request } from 'express';
+import express, { Router, type Request } from 'express';
 import { memberOf, requireCaller, type Member } from '../auth.js';
-import { db } from '../supabase.js';
+import { db, PHOTO_BUCKET } from '../supabase.js';
 import { handle, HttpError, parseBirthday, requireText } from '../util.js';
 import { TEMPLATE_COLS } from './tasks.js';
 
@@ -45,7 +45,7 @@ settingsRouter.delete(
     const me = requireAdmin(req);
     const { data: target } = await db()
       .from('members')
-      .select('id, is_admin')
+      .select('id, is_admin, photo_path')
       .eq('id', req.params.id)
       .eq('family_id', me.family_id)
       .maybeSingle();
@@ -53,6 +53,47 @@ settingsRouter.delete(
     if (target.is_admin) throw new HttpError(400, "The admin can't be removed");
     const { error } = await db().from('members').delete().eq('id', target.id).eq('family_id', me.family_id);
     if (error) throw error;
+    if (target.photo_path) await db().storage.from(PHOTO_BUCKET).remove([target.photo_path]);
+    res.json({ ok: true });
+  }),
+);
+
+// ----- Member face photos (already cropped to a square in the browser) -----
+
+const FACE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+async function memberInFamily(familyId: string, id: string) {
+  const { data } = await db().from('members').select('id, photo_path').eq('id', id).eq('family_id', familyId).maybeSingle();
+  if (!data) throw new HttpError(404, 'Family member not found');
+  return data as { id: string; photo_path: string | null };
+}
+
+settingsRouter.post(
+  '/settings/members/:id/photo',
+  express.raw({ type: FACE_TYPES, limit: '2mb' }),
+  handle(async (req, res) => {
+    const me = requireAdmin(req);
+    const member = await memberInFamily(me.family_id, String(req.params.id));
+    const type = (req.headers['content-type'] ?? '').split(';')[0];
+    if (!FACE_TYPES.includes(type) || !Buffer.isBuffer(req.body) || req.body.length === 0) throw new HttpError(400, 'Please upload a JPG, PNG or WEBP image');
+    const path = `${me.family_id}/members/${member.id}-${Date.now()}.${type.split('/')[1].replace('jpeg', 'jpg')}`;
+    const { error: upErr } = await db().storage.from(PHOTO_BUCKET).upload(path, req.body, { contentType: type });
+    if (upErr) throw upErr;
+    const { error } = await db().from('members').update({ photo_path: path }).eq('id', member.id);
+    if (error) throw error;
+    if (member.photo_path) await db().storage.from(PHOTO_BUCKET).remove([member.photo_path]);
+    res.json({ ok: true });
+  }),
+);
+
+settingsRouter.delete(
+  '/settings/members/:id/photo',
+  handle(async (req, res) => {
+    const me = requireAdmin(req);
+    const member = await memberInFamily(me.family_id, String(req.params.id));
+    const { error } = await db().from('members').update({ photo_path: null }).eq('id', member.id);
+    if (error) throw error;
+    if (member.photo_path) await db().storage.from(PHOTO_BUCKET).remove([member.photo_path]);
     res.json({ ok: true });
   }),
 );

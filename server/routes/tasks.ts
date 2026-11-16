@@ -140,14 +140,21 @@ async function checkAssignee(familyId: string, assignedTo: unknown): Promise<str
 }
 
 // "day" is the start date
-const PT_COLS = 'id, text, day, due_date, done, done_at, assigned_to, created_by, created_at';
+const PT_COLS = 'id, subject, text, day, due_date, done, done_at, assigned_to, created_by, created_at';
 
-/** Optional due date: null/'' = none; must not be before the start date. */
-function parseDue(input: unknown, start: string): string | null {
-  if (input === null || input === undefined || input === '') return null;
+/** Required end date; must not be before the start date. */
+function parseDue(input: unknown, start: string): string {
+  if (input === null || input === undefined || input === '') throw new HttpError(400, 'Please choose an end date');
   const due = parseDay(input);
-  if (due < start) throw new HttpError(400, 'The due date can’t be before the start date');
+  if (due < start) throw new HttpError(400, 'The end date can’t be before the start date');
   return due;
+}
+
+/** Optional description (empty = none). */
+function parseDescription(input: unknown): string | null {
+  const s = typeof input === 'string' ? input.trim() : '';
+  if (s.length > 1000) throw new HttpError(400, 'Description is too long (max 1000)');
+  return s || null;
 }
 
 /**
@@ -179,7 +186,8 @@ tasksRouter.post(
     const row = {
       family_id: me.family_id,
       created_by: me.id,
-      text: requireText(req.body?.text, 'Task', 500),
+      subject: requireText(req.body?.subject, 'Subject', 80),
+      text: parseDescription(req.body?.description),
       day,
       due_date: parseDue(req.body?.dueDate, day),
       assigned_to: await checkAssignee(me.family_id, req.body?.assignedTo),
@@ -195,7 +203,8 @@ tasksRouter.patch(
   handle(async (req, res) => {
     const me = requireParent(req);
     const patch: Record<string, unknown> = {};
-    if ('text' in (req.body ?? {})) patch.text = requireText(req.body.text, 'Task', 500);
+    if ('subject' in (req.body ?? {})) patch.subject = requireText(req.body.subject, 'Subject', 80);
+    if ('description' in (req.body ?? {})) patch.text = parseDescription(req.body.description);
     if ('done' in (req.body ?? {})) {
       patch.done = Boolean(req.body.done);
       patch.done_at = patch.done ? new Date().toISOString() : null;
@@ -206,7 +215,7 @@ tasksRouter.patch(
       if (!cur) throw new HttpError(404, 'Task not found');
       const start = 'day' in req.body ? parseDay(req.body.day) : cur.day;
       patch.day = start;
-      patch.due_date = 'dueDate' in req.body ? parseDue(req.body.dueDate, start) : parseDue(cur.due_date, start);
+      patch.due_date = 'dueDate' in req.body ? parseDue(req.body.dueDate, start) : parseDue(cur.due_date ?? start, start);
     }
     if (Object.keys(patch).length === 0) throw new HttpError(400, 'Nothing to update');
     const { data, error } = await db()
@@ -280,7 +289,7 @@ tasksRouter.get(
         .in('member_id', kids.map((k) => k.id))
         .gte('day', from)
         .lte('day', to),
-      db().from('kid_rewards').select('min_score, member_ids').eq('family_id', me.family_id).is('archived_at', null),
+      db().from('kid_rewards').select('id, title, min_score, member_ids').eq('family_id', me.family_id).is('archived_at', null).order('min_score'),
     ]);
     if (tErr || cErr || rErr) throw tErr ?? cErr ?? rErr;
     const done = new Set((checks ?? []).map((c) => `${c.member_id}|${c.template_id}|${c.day}`));
@@ -290,7 +299,8 @@ tasksRouter.get(
       const mine = (templates as Tpl[]).filter((t) => appliesTo(t, kid.id));
       const activeOn = (t: Tpl, day: string) =>
         day >= toDay(new Date(t.created_at)) && day >= kidStart && (!t.archived_at || day < toDay(new Date(t.archived_at)));
-      const rewardScore = Math.min(...(rewards ?? []).filter((r) => appliesTo(r, kid.id)).map((r) => r.min_score), Infinity);
+      const myRewards = (rewards ?? []).filter((r) => appliesTo(r, kid.id));
+      const rewardScore = Math.min(...myRewards.map((r) => r.min_score), Infinity);
 
       const days: { day: string; done: number; total: number; reward: boolean }[] = [];
       const perTask = new Map<number, { done: number; total: number }>();
@@ -328,6 +338,13 @@ tasksRouter.get(
         days,
         periods,
         grid,
+        // Each reward: how many days in the range it was earned (ticked at least min_score, or all tasks if fewer)
+        rewards: myRewards.map((r) => ({
+          id: r.id,
+          title: r.title,
+          min_score: r.min_score,
+          earnedDays: days.filter((d) => d.total > 0 && d.done >= Math.min(r.min_score, d.total)).length,
+        })),
         tasks: mine
           .filter((t) => perTask.has(t.id))
           .map((t) => ({ id: t.id, title: t.title, icon: t.icon, period: t.period, archived: Boolean(t.archived_at), ...perTask.get(t.id)! })),

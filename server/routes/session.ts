@@ -33,27 +33,31 @@ sessionRouter.get(
     const isAdmin = me.is_admin && caller.kind === 'admin';
     const [{ data: family, error: fErr }, { data: members, error: mErr }] = await Promise.all([
       db().from('families').select('id, family_name, admin_name, photo_path').eq('id', me.family_id).single(),
-      db().from('members').select('id, name, role, birthday, is_admin').eq('family_id', me.family_id).order('created_at'),
+      db().from('members').select('id, name, role, birthday, is_admin, photo_path').eq('family_id', me.family_id).order('created_at'),
     ]);
     if (fErr || mErr) throw fErr ?? mErr;
 
-    let photoUrl: string | null = null;
-    if (family.photo_path) {
-      const { data } = await db().storage.from(PHOTO_BUCKET).createSignedUrl(family.photo_path, 60 * 60);
-      photoUrl = data?.signedUrl ?? null;
+    // One batch of signed links for the family photo and every face photo
+    const paths = [family.photo_path, ...(members ?? []).map((m) => m.photo_path)].filter(Boolean) as string[];
+    const urls = new Map<string, string>();
+    if (paths.length) {
+      const { data } = await db().storage.from(PHOTO_BUCKET).createSignedUrls(paths, 60 * 60);
+      (data ?? []).forEach((d) => d.path && d.signedUrl && urls.set(d.path, d.signedUrl));
     }
+    const photoUrl = family.photo_path ? (urls.get(family.photo_path) ?? null) : null;
 
     res.json({
       kind: caller.kind,
       needsOnboarding: false,
       member: { id: me.id, name: me.name, role: me.role, is_admin: me.is_admin, age: ageFrom(me.birthday) },
       family: { id: family.id, family_name: family.family_name, admin_name: family.admin_name, photoUrl },
-      members: (members as Member[]).map((m) => ({
+      members: (members as (Member & { photo_path: string | null })[]).map((m) => ({
         id: m.id,
         name: m.name,
         role: m.role,
         is_admin: m.is_admin,
         age: ageFrom(m.birthday),
+        photoUrl: m.photo_path ? (urls.get(m.photo_path) ?? null) : null,
         ...(isAdmin ? { birthday: m.birthday } : {}),
       })),
     });

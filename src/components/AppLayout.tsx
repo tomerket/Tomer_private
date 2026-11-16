@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, ClipboardCheck, Home, LogOut, Menu, Settings, ShoppingCart, X, type LucideIcon } from 'lucide-react';
+import { BarChart3, CalendarDays, ClipboardCheck, Home, LogOut, Menu, Settings, ShoppingCart, UtensilsCrossed, X, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useRoles, useSession } from '../lib/session';
@@ -15,6 +15,7 @@ const NAV: NavItem[] = [
 const SOON = [
   { label: 'Calendar', icon: CalendarDays },
   { label: 'Shopping List', icon: ShoppingCart },
+  { label: 'Food menu', icon: UtensilsCrossed },
 ];
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {

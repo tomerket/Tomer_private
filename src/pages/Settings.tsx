@@ -1,7 +1,8 @@
-import { Plus, Settings as SettingsIcon, Trash2, UserMinus, UserPlus, X } from 'lucide-react';
+import { Camera, ImageOff, Plus, Settings as SettingsIcon, Trash2, UserMinus, UserPlus, X } from 'lucide-react';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { AppLayout } from '../components/AppLayout';
 import { BirthdayInput, isValidBirthday } from '../components/BirthdayInput';
+import { Avatar, FacePicker } from '../components/Face';
 import { ErrorBox } from '../components/ui';
 import { api } from '../lib/api';
 import { useSession, type MemberSummary } from '../lib/session';
@@ -81,6 +82,8 @@ function MembersSettings() {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [faceFor, setFaceFor] = useState<MemberSummary | null>(null);
+
   async function remove(m: MemberSummary) {
     setError(null);
     try {
@@ -92,19 +95,35 @@ function MembersSettings() {
     }
   }
 
+  async function removeFace(m: MemberSummary) {
+    if (!window.confirm(`Remove ${m.name}'s face photo?`)) return;
+    setError(null);
+    try {
+      await api(`/settings/members/${m.id}/photo`, { method: 'DELETE' });
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <ErrorBox message={error} />
+      {faceFor && (
+        <FacePicker
+          name={faceFor.name}
+          onCancel={() => setFaceFor(null)}
+          onSave={async (face) => {
+            await api(`/settings/members/${faceFor.id}/photo`, { raw: face });
+            await refresh();
+            setFaceFor(null);
+          }}
+        />
+      )}
       <ul className="space-y-2">
         {me?.members.map((m) => (
           <li key={m.id} className="flex flex-wrap items-center gap-3 rounded-2xl border-2 border-line p-3">
-            <span
-              className={`grid h-11 w-11 place-items-center rounded-full text-xl font-extrabold text-white ${
-                m.role === 'kid' ? 'bg-cyan' : 'bg-violet'
-              }`}
-            >
-              {m.name[0]?.toUpperCase()}
-            </span>
+            <Avatar name={m.name} photoUrl={m.photoUrl} role={m.role} size={56} />
             <div className="min-w-0 flex-1">
               <div className="text-lg font-extrabold">
                 {m.name}
@@ -114,6 +133,14 @@ function MembersSettings() {
                 <span className="capitalize">{m.role}</span> · {fmtBirthday(m.birthday)} · age {m.age}
               </div>
             </div>
+            <button className="btn btn-ghost py-2" onClick={() => setFaceFor(m)}>
+              <Camera size={18} /> {m.photoUrl ? 'Change face photo' : 'Add face photo'}
+            </button>
+            {m.photoUrl && (
+              <button className="btn btn-ghost px-3 py-2 text-muted" title="Remove face photo" aria-label={`Remove ${m.name}'s face photo`} onClick={() => removeFace(m)}>
+                <ImageOff size={18} />
+              </button>
+            )}
             {!m.is_admin &&
               (confirmId === m.id ? (
                 <div className="flex items-center gap-2">
@@ -151,6 +178,9 @@ function AddMemberForm({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState('');
   const [role, setRole] = useState<'kid' | 'parent'>('kid');
   const [birthday, setBirthday] = useState('');
+  const [face, setFace] = useState<Blob | null>(null);
+  const [facePreview, setFacePreview] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -161,7 +191,8 @@ function AddMemberForm({ onDone }: { onDone: () => void }) {
     if (!isValidBirthday(birthday)) return setError('Please enter the birthday as MM-DD-YYYY');
     setBusy(true);
     try {
-      await api('/settings/members', { body: { name, role, birthday } });
+      const { id } = await api<{ id: string }>('/settings/members', { body: { name, role, birthday } });
+      if (face) await api(`/settings/members/${id}/photo`, { raw: face });
       await refresh();
       onDone();
     } catch (err) {
@@ -201,6 +232,27 @@ function AddMemberForm({ onDone }: { onDone: () => void }) {
           </button>
         ))}
       </div>
+      <div className="flex items-center gap-3">
+        {facePreview ? (
+          <img src={facePreview} alt="" className="h-14 w-14 rounded-full object-cover" />
+        ) : (
+          <Avatar name={name || '?'} role={role} size={56} />
+        )}
+        <button type="button" className="btn btn-ghost bg-white py-2" onClick={() => setPicking(true)}>
+          <Camera size={18} /> {face ? 'Change face photo' : 'Add face photo (optional)'}
+        </button>
+      </div>
+      {picking && (
+        <FacePicker
+          name={name || 'new member'}
+          onCancel={() => setPicking(false)}
+          onSave={(blob) => {
+            setFace(blob);
+            setFacePreview(URL.createObjectURL(blob));
+            setPicking(false);
+          }}
+        />
+      )}
       <ErrorBox message={error} />
       <button className="btn btn-primary w-full" disabled={busy}>
         {busy ? 'Adding…' : 'Add'}

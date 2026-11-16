@@ -1,7 +1,8 @@
-import { Check, ChevronLeft, ChevronRight, Gift, Lock, Smile } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Gift, Lock, Smile, Trophy, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AppLayout } from '../components/AppLayout';
+import { Avatar } from '../components/Face';
 import { ErrorBox } from '../components/ui';
 import { api, today } from '../lib/api';
 import { useRoles, useSession } from '../lib/session';
@@ -52,6 +53,7 @@ export default function KidsTasks() {
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [showRewards, setShowRewards] = useState(false);
   const minDay = addDays(todayIso, -DAYS_BACK);
   // Kids can tick today only; parents can also fix the last 5 days
   const canEdit = day === todayIso || isParent;
@@ -96,6 +98,16 @@ export default function KidsTasks() {
 
   return (
     <AppLayout title="Kids Tasks" icon={<Smile className="text-violet" />} fill>
+      {showRewards && (
+        <RewardsDialog
+          kidName={kidName ?? ''}
+          dayText={dayLabel(day, todayIso)}
+          rewards={rewards}
+          done={done}
+          total={total}
+          onClose={() => setShowRewards(false)}
+        />
+      )}
       {/* Top row: back · kids · date navigation */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Link to="/tasks" className="mr-2 inline-flex items-center gap-1 text-lg font-bold text-violet hover:underline">
@@ -106,14 +118,23 @@ export default function KidsTasks() {
             <button
               key={k.id}
               onClick={() => setKidId(k.id)}
-              className={`rounded-full px-5 py-1.5 text-lg font-bold transition ${
+              className={`flex items-center gap-2 rounded-full py-1 pl-1 pr-4 text-lg font-bold transition ${
                 k.id === kidId ? 'bg-violet text-white shadow' : 'bg-soft text-ink hover:bg-violet-soft'
               }`}
             >
+              <Avatar name={k.name} photoUrl={k.photoUrl} role="kid" size={32} />
               {k.name}
             </button>
           ))}
-        <div className="ml-auto flex items-center gap-1 rounded-xl bg-soft p-1">
+        <button
+          className="btn ml-auto bg-amber-100 px-4 py-2.5 text-amber-900 hover:bg-amber-200"
+          onClick={() => setShowRewards(true)}
+          disabled={kids.length === 0}
+        >
+          <Gift size={22} /> Rewards
+          {reached.length > 0 && <span className="rounded-full bg-amber-500 px-2 text-sm text-white">{reached.length}</span>}
+        </button>
+        <div className="flex items-center gap-1 rounded-xl bg-soft p-1">
           <button
             aria-label="Previous day"
             className="rounded-lg p-2 text-violet transition hover:bg-white disabled:opacity-30"
@@ -226,5 +247,64 @@ export default function KidsTasks() {
         </>
       )}
     </AppLayout>
+  );
+}
+
+/** The kid's rewards: what each needs today and whether it is earned. */
+function RewardsDialog({
+  kidName,
+  dayText,
+  rewards,
+  done,
+  total,
+  onClose,
+}: {
+  kidName: string;
+  dayText: string;
+  rewards: Reward[];
+  done: number;
+  total: number;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" role="dialog" aria-modal aria-label={`${kidName}'s rewards`} onClick={onClose}>
+      <div className="panel w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-1 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-2xl font-extrabold">
+            <Gift className="text-amber-500" /> {kidName}'s rewards
+          </h2>
+          <button aria-label="Close" className="p-1 text-muted" onClick={onClose}>
+            <X />
+          </button>
+        </div>
+        <p className="mb-4 text-muted">
+          {dayText}: {done} of {total} tasks done
+        </p>
+        {rewards.length === 0 ? (
+          <p className="rounded-2xl bg-soft p-4 text-center text-lg text-muted">No rewards yet. Ask a parent to add one in Settings.</p>
+        ) : (
+          <ul className="space-y-2">
+            {rewards.map((r) => {
+              const need = Math.min(r.min_score, total);
+              const earned = total > 0 && done >= need;
+              return (
+                <li key={r.id} className={`flex items-center gap-3 rounded-2xl border-2 p-3 ${earned ? 'border-amber-400 bg-amber-50' : 'border-line'}`}>
+                  <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${earned ? 'bg-amber-400 text-white' : 'bg-soft text-muted'}`}>
+                    {earned ? <Trophy size={22} /> : <Gift size={22} />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-lg font-extrabold">{r.title}</div>
+                    <div className="text-muted">Needs {r.min_score} tasks a day</div>
+                  </div>
+                  <span className={`shrink-0 text-right font-extrabold ${earned ? 'text-amber-700' : 'text-muted'}`}>
+                    {earned ? 'Earned! 🏆' : `${need - done} more`}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }
