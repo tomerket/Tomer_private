@@ -26,13 +26,14 @@ type ParentTask = {
   icon: string | null; // gallery picture
   photoUrl: string | null;
 };
-type Filter = 'today' | 'due' | 'open';
+type Filter = 'today' | 'due' | 'open' | 'done';
 type Patch = Partial<{ subject: string; description: string; done: boolean; day: string; dueDate: string; icon: string | null }>;
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'today', label: 'Open today' },
   { key: 'due', label: 'Due today' },
   { key: 'open', label: 'All open' },
+  { key: 'done', label: 'Done' },
 ];
 
 const mdy = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(0, 4)}`;
@@ -130,7 +131,7 @@ export default function ParentsTasks() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const q = filter === 'today' ? `day=${todayIso}` : 'filter=open';
+      const q = filter === 'today' ? `day=${todayIso}` : filter === 'done' ? 'filter=done' : 'filter=open';
       setTasks((await api<{ tasks: ParentTask[] }>(`/parent-tasks?${q}`)).tasks);
     } catch (e) {
       setError((e as Error).message);
@@ -219,7 +220,8 @@ export default function ParentsTasks() {
     .filter((t) => {
       if (filter === 'today') return !t.done || (t.done_at && localDay(t.done_at) === todayIso);
       if (filter === 'due') return !t.done && t.due_date <= todayIso;
-      return true;
+      if (filter === 'done') return t.done; // reopening a task takes it off this list
+      return !t.done; // All open: a task ticked done leaves the list
     })
     .filter((t) => who === null || (t.assigned_to !== null && who.includes(t.assigned_to)));
   const doneCount = visible.filter((t) => t.done).length;
@@ -296,11 +298,12 @@ export default function ParentsTasks() {
         )}
 
         <div className="mb-4 flex flex-wrap items-center gap-3">
-          <div className="grid grid-cols-3 gap-1 rounded-full bg-soft p-1">
+          <div className="grid grid-cols-2 gap-1 rounded-3xl bg-soft p-1 sm:grid-cols-4 sm:rounded-full">
             {FILTERS.map((f) => (
               <button
                 key={f.key}
                 onClick={() => setFilter(f.key)}
+                aria-pressed={filter === f.key}
                 className={`rounded-full px-5 py-2.5 text-lg font-bold transition ${filter === f.key ? 'bg-white text-violet shadow' : 'text-muted'}`}
               >
                 {f.label}
@@ -333,7 +336,13 @@ export default function ParentsTasks() {
           !error && <div className="py-10 text-center text-muted">Loading…</div>
         ) : visible.length === 0 ? (
           <div className="rounded-2xl border-2 border-dashed border-line py-12 text-center text-2xl text-muted">
-            {filter === 'today' ? 'No tasks for today yet.' : filter === 'due' ? 'Nothing due today.' : 'Nothing open. Nice work!'}
+            {filter === 'today'
+              ? 'No tasks for today yet.'
+              : filter === 'due'
+                ? 'Nothing due today.'
+                : filter === 'done'
+                  ? 'No finished tasks yet. Tick a task to close it.'
+                  : 'Nothing open. Nice work!'}
           </div>
         ) : (
           <ul className="space-y-3">

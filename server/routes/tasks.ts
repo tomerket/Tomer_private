@@ -1,7 +1,7 @@
 import express, { Router, type Request } from 'express';
 import { memberOf, requireCaller, type Member } from '../auth.js';
 import { db, PHOTO_BUCKET } from '../supabase.js';
-import { currentStreak, REWARD_COLS, STREAK_LOOKBACK_DAYS, streaksCompleted, type RewardRow } from '../rewards.js';
+import { REWARD_COLS, type RewardRow } from '../rewards.js';
 import { handle, HttpError, parseDay, requireText } from '../util.js';
 
 export const tasksRouter = Router();
@@ -55,23 +55,16 @@ tasksRouter.get(
     checkDayWindow(day);
     const [{ data: templates, error: tErr }, { data: checks, error: cErr }, { data: rewards, error: rErr }] = await Promise.all([
       db().from('kid_task_templates').select(TEMPLATE_COLS).eq('family_id', kid.family_id).is('archived_at', null).order('sort_order'),
-      // Today's ticks plus enough history to work out streaks
-      db().from('kid_task_checks').select('template_id, day').eq('member_id', kid.id).gte('day', shiftDay(day, -STREAK_LOOKBACK_DAYS)).lte('day', day),
-      db().from('kid_rewards').select(REWARD_COLS).eq('family_id', kid.family_id).is('archived_at', null).order('min_score'),
+      db().from('kid_task_checks').select('template_id, day').eq('member_id', kid.id).eq('day', day),
+      // Rewards are per day: only "tasks needed per day" rewards count
+      db().from('kid_rewards').select(REWARD_COLS).eq('family_id', kid.family_id).eq('kind', 'daily').is('archived_at', null).order('min_score'),
     ]);
     if (tErr || cErr || rErr) throw tErr ?? cErr ?? rErr;
     const done = new Set((checks ?? []).filter((c) => c.day === day).map((c) => c.template_id));
     const mine = (templates ?? []).filter((t) => appliesTo(t, kid.id));
-    const daysDone = (taskId: number) => new Set((checks ?? []).filter((c) => c.template_id === taskId).map((c) => c.day));
     res.json({
       tasks: mine.map(({ member_ids: _m, ...t }) => ({ ...t, checked: done.has(t.id) })),
-      rewards: (rewards as RewardRow[])
-        .filter((r) => appliesTo(r, kid.id) && (r.kind === 'daily' || mine.some((t) => t.id === r.task_id)))
-        .map(({ member_ids: _m, ...r }) => {
-          if (r.kind !== 'streak') return r;
-          const streak = currentStreak(daysDone(r.task_id!), day);
-          return { ...r, task_title: mine.find((t) => t.id === r.task_id)?.title, streak, earned: streak >= r.streak_days! };
-        }),
+      rewards: (rewards as RewardRow[]).filter((r) => appliesTo(r, kid.id)).map(({ member_ids: _m, ...r }) => r),
     });
   }),
 );
@@ -189,12 +182,18 @@ function parseDescription(input: unknown): string | null {
  * filter=today (default): tasks that have started by `day` and are not done, plus ones done
  * recently (the browser keeps only those done today, in its own time zone).
  * filter=open: everything not done, including tasks that start later.
+ * filter=done: finished (closed) tasks, most recently finished first.
  */
 tasksRouter.get(
   '/parent-tasks',
   handle(async (req, res) => {
     const me = requireParent(req);
     let q = db().from('parent_tasks').select(PT_COLS).eq('family_id', me.family_id);
+    if (req.query.filter === 'done') {
+      const { data, error } = await q.eq('done', true).order('done_at', { ascending: false, nullsFirst: false }).limit(200);
+      if (error) throw error;
+      return void res.json({ tasks: await withPhotoUrls(data ?? []) });
+    }
     if (req.query.filter === 'open') q = q.eq('done', false);
     else {
       const recent = new Date(Date.now() - 36 * 3_600_000).toISOString();
@@ -359,9 +358,10 @@ tasksRouter.get(
         .from('kid_task_checks')
         .select('member_id, template_id, day')
         .in('member_id', kids.map((k) => k.id))
-        .gte('day', shiftDay(from, -STREAK_LOOKBACK_DAYS)) // history before the range, for streaks
+        .gte('day', from)
         .lte('day', to),
-      db().from('kid_rewards').select(REWARD_COLS).eq('family_id', me.family_id).is('archived_at', null).order('min_score'),
+      // Rewards are per day: only "tasks needed per day" rewards count
+      db().from('kid_rewards').select(REWARD_COLS).eq('family_id', me.family_id).eq('kind', 'daily').is('archived_at', null).order('min_score'),
     ]);
     if (tErr || cErr || rErr) throw tErr ?? cErr ?? rErr;
     const done = new Set((checks ?? []).map((c) => `${c.member_id}|${c.template_id}|${c.day}`));
@@ -369,10 +369,12 @@ tasksRouter.get(
     const result = kids.map((kid) => {
       const kidStart = toDay(new Date(kid.created_at));
       const mine = (templates as Tpl[]).filter((t) => appliesTo(t, kid.id));
+      // A task counts on a day if it was on the list then, or if it was ticked that day
+      // (a parent can tick earlier days, even before the task or kid was added).
       const activeOn = (t: Tpl, day: string) =>
-        day >= toDay(new Date(t.created_at)) && day >= kidStart && (!t.archived_at || day < toDay(new Date(t.archived_at)));
-      const myRewards = (rewards as RewardRow[]).filter((r) => appliesTo(r, kid.id) && (r.kind === 'daily' || mine.some((t) => t.id === r.task_id)));
-      const daily = myRewards.filter((r) => r.kind === 'daily');
+        done.has(`${kid.id}|${t.id}|${day}`) ||
+        (day >= toDay(new Date(t.created_at)) && day >= kidStart && (!t.archived_at || day < toDay(new Date(t.archived_at))));
+      const daily = (rewards as RewardRow[]).filter((r) => appliesTo(r, kid.id));
       const dailyEarned = new Map(daily.map((r) => [r.id, 0]));
 
       const days: { day: string; done: number; total: number; reward: boolean }[] = [];
@@ -419,24 +421,15 @@ tasksRouter.get(
         days,
         periods,
         grid,
-        // Each reward: how many times it was earned in the range
-        rewards: myRewards.map((r) => ({
+        // Each reward: on how many days it was earned in the range (at most once a day)
+        rewards: daily.map((r) => ({
           id: r.id,
           title: r.title,
           icon: r.icon,
           kind: r.kind,
           min_score: r.min_score,
           streak_days: r.streak_days,
-          task_title: r.task_id ? mine.find((t) => t.id === r.task_id)?.title : undefined,
-          earned:
-            r.kind === 'daily'
-              ? dailyEarned.get(r.id)!
-              : streaksCompleted(
-                  new Set((checks ?? []).filter((c) => c.member_id === kid.id && c.template_id === r.task_id).map((c) => c.day)),
-                  from,
-                  to,
-                  r.streak_days!,
-                ),
+          earned: dailyEarned.get(r.id)!,
         })),
         tasks: mine
           .filter((t) => perTask.has(t.id))
@@ -445,13 +438,10 @@ tasksRouter.get(
           done: totalDone,
           total,
           percent: total ? Math.round((totalDone / total) * 100) : null,
-          perfectDays: days.filter((d) => d.total > 0 && d.done === d.total).length,
-          rewardsEarned: null as number | null, // filled in below
           trackedDays: days.filter((d) => d.total > 0).length,
         },
       };
     });
-    for (const k of result) k.summary.rewardsEarned = k.rewards.length ? k.rewards.reduce((a, r) => a + r.earned, 0) : null;
     res.json({ kids: result });
   }),
 );

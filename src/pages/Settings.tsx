@@ -749,6 +749,9 @@ function RewardsSettings() {
                     <div className="text-muted">
                       {rewardRule({ ...r, task_title: taskTitle(r.task_id) })}, for {kidNames(r.member_ids, me?.members ?? [])}
                     </div>
+                    {r.kind === 'streak' && (
+                      <div className="text-sm font-bold text-danger">Old reward type, not counted anymore. Change it to tasks per day or remove it.</div>
+                    )}
                   </div>
                   <button
                     aria-label={`Change ${r.title}`}
