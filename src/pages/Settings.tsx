@@ -1,4 +1,4 @@
-import { Camera, ImageOff, Plus, Settings as SettingsIcon, Trash2, Upload, UserMinus, UserPlus, X } from 'lucide-react';
+import { Camera, Check, ImageOff, Pencil, Plus, Settings as SettingsIcon, Trash2, UserMinus, UserPlus, X } from 'lucide-react';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { AppLayout } from '../components/AppLayout';
 import { BirthdayInput, isValidBirthday } from '../components/BirthdayInput';
@@ -8,6 +8,7 @@ import { api } from '../lib/api';
 import { squareImage } from '../lib/image';
 import { REWARD_ICONS, rewardIconUrl, rewardRule, type RewardKind } from '../lib/rewardIcons';
 import { CheckDropdown } from '../components/CheckDropdown';
+import { PhotoSourceButton } from '../components/PhotoSourceButton';
 import { useSession, type MemberSummary } from '../lib/session';
 import { PERIODS, TASK_ICONS, type Period } from '../lib/taskIcons';
 import { TaskPicture } from './KidsTasks';
@@ -271,6 +272,23 @@ function AddMemberForm({ onDone }: { onDone: () => void }) {
 
 // ---------------- Kids tasks ----------------
 
+/** "Must do task" checkbox: ✓ when the task is a must-do task. */
+function MustDoBox({ checked, onChange, compact = false }: { checked: boolean; onChange: (on: boolean) => void; compact?: boolean }) {
+  return (
+    <label className={`inline-flex cursor-pointer select-none items-center gap-2 font-bold ${compact ? 'text-sm' : ''}`} title="Must do task">
+      <input type="checkbox" className="peer sr-only" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span
+        className={`grid shrink-0 place-items-center rounded-md border-2 transition peer-focus-visible:outline peer-focus-visible:outline-3 peer-focus-visible:outline-violet ${
+          compact ? 'h-6 w-6' : 'h-7 w-7'
+        } ${checked ? 'border-danger bg-danger' : 'border-line bg-white'}`}
+      >
+        {checked && <Check size={compact ? 16 : 18} strokeWidth={4} className="text-white" />}
+      </span>
+      Must do{compact ? '' : ' task'}
+    </label>
+  );
+}
+
 type Template = { id: number; title: string; icon: string; period: Period; sort_order: number; member_ids: string[] | null; mandatory: boolean };
 
 function TasksSettings() {
@@ -312,6 +330,17 @@ function TasksSettings() {
     }
   }
 
+  async function setMustDo(id: number, on: boolean) {
+    setError(null);
+    setTasks((l) => l?.map((t) => (t.id === id ? { ...t, mandatory: on } : t)) ?? null);
+    try {
+      await api(`/settings/kid-tasks/${id}`, { method: 'PATCH', body: { mandatory: on } });
+    } catch (e) {
+      setError((e as Error).message);
+      load();
+    }
+  }
+
   async function saveMandatory(ids: string[] | null) {
     if (!tasks) return;
     const chosen = ids === null ? tasks.map((t) => t.id) : ids.map(Number);
@@ -338,8 +367,6 @@ function TasksSettings() {
             ariaLabel="Must-do tasks"
             className="max-w-md"
             allLabel="All tasks"
-            noneLabel="No must-do tasks"
-            allowNone
             options={tasks.map((t) => ({ id: String(t.id), label: t.title, icon: <TaskPicture icon={t.icon} className="h-7 w-7 rounded-md" /> }))}
             selected={mandatoryIds.length === tasks.length ? null : mandatoryIds}
             onChange={saveMandatory}
@@ -374,6 +401,7 @@ function TasksSettings() {
                           For: {kidNames(t.member_ids, me?.members ?? [])} ✎
                         </button>
                       </div>
+                      <MustDoBox checked={t.mandatory} onChange={(on) => setMustDo(t.id, on)} compact />
                       {editKidsId === t.id && (
                         <div className="w-full">
                           <KidPicker value={t.member_ids} onChange={(ids) => setKids(t.id, ids)} />
@@ -411,6 +439,7 @@ function AddTaskForm({ onAdded }: { onAdded: (t: Template) => void }) {
   const [period, setPeriod] = useState<Period>('general');
   const [icon, setIcon] = useState('star');
   const [kids, setKids] = useState<string[] | null>(null);
+  const [mandatory, setMandatory] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -436,7 +465,7 @@ function AddTaskForm({ onAdded }: { onAdded: (t: Template) => void }) {
     if (!title.trim()) return setError('Please enter the task name');
     setBusy(true);
     try {
-      const { task } = await api<{ task: Template }>('/settings/kid-tasks', { body: { title, period, icon, memberIds: kids ?? 'all' } });
+      const { task } = await api<{ task: Template }>('/settings/kid-tasks', { body: { title, period, icon, mandatory, memberIds: kids ?? 'all' } });
       onAdded(task);
       setTitle('');
     } catch (err) {
@@ -475,13 +504,12 @@ function AddTaskForm({ onAdded }: { onAdded: (t: Template) => void }) {
         <span className="label">For which kids</span>
         <KidPicker value={kids} onChange={setKids} />
       </div>
+      <MustDoBox checked={mandatory} onChange={setMandatory} />
       <div>
         <span className="label">Picture</span>
         <div className="mb-2 flex flex-wrap items-center gap-3">
-          <label className={`btn btn-ghost cursor-pointer py-2 ${uploading ? 'opacity-60' : ''}`}>
-            <Upload size={18} /> {uploading ? 'Uploading…' : 'Upload a photo from this phone or computer'}
-            <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={(e) => uploadPhoto(e.target.files?.[0])} />
-          </label>
+          <PhotoSourceButton label="Your own photo" disabled={uploading} onPick={(f) => uploadPhoto(f)} />
+          <span className="text-muted">{uploading ? 'Uploading…' : 'Your own photo, or pick one below'}</span>
           {icon.startsWith('https://') && (
             <span className="inline-flex items-center gap-2 font-semibold text-violet">
               <TaskPicture icon={icon} className="h-12 w-12 rounded-xl ring-2 ring-violet" /> Your photo is selected
@@ -540,6 +568,28 @@ function RewardsSettings() {
   const [icon, setIcon] = useState('gift');
   const [kids, setKids] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  /** Load a reward into the form to change it. */
+  function startEdit(r: Reward) {
+    setEditingId(r.id);
+    setKind(r.kind);
+    setTitle(r.title);
+    setIcon(r.icon);
+    setKids(r.member_ids);
+    if (r.min_score) setScore(r.min_score);
+    setTaskId(r.task_id ? String(r.task_id) : '');
+    if (r.streak_days) setStreakDays(r.streak_days);
+    setError(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function stopEdit() {
+    setEditingId(null);
+    setTitle('');
+    setIcon('gift');
+    setKids(null);
+  }
 
   useEffect(() => {
     api<{ rewards: Reward[] }>('/settings/rewards')
@@ -565,9 +615,15 @@ function RewardsSettings() {
         kind === 'daily'
           ? { kind, title, icon, minScore: score, memberIds: kids ?? 'all' }
           : { kind, title, icon, taskId: Number(taskId), streakDays, memberIds: kids ?? 'all' };
-      const { reward } = await api<{ reward: Reward }>('/settings/rewards', { body });
-      setRewards((l) => [...(l ?? []), reward]);
-      setTitle('');
+      if (editingId) {
+        const { reward } = await api<{ reward: Reward }>(`/settings/rewards/${editingId}`, { method: 'PATCH', body });
+        setRewards((l) => l?.map((x) => (x.id === editingId ? reward : x)) ?? null);
+        stopEdit();
+      } else {
+        const { reward } = await api<{ reward: Reward }>('/settings/rewards', { body });
+        setRewards((l) => [...(l ?? []), reward]);
+        setTitle('');
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -591,7 +647,7 @@ function RewardsSettings() {
   return (
     <div className="space-y-6">
       <form onSubmit={add} className="space-y-4 rounded-2xl bg-soft p-4 sm:p-5">
-        <div className="text-lg font-extrabold text-violet">Add a reward</div>
+        <div className="text-lg font-extrabold text-violet">{editingId ? 'Change reward' : 'Add a reward'}</div>
 
         <div className="grid gap-2 sm:grid-cols-2">
           <button type="button" className={choice(kind === 'daily')} onClick={() => setKind('daily')}>
@@ -668,9 +724,16 @@ function RewardsSettings() {
           <KidPicker value={kids} onChange={setKids} />
         </div>
         <ErrorBox message={error} />
-        <button className="btn btn-primary w-full sm:w-auto" disabled={busy}>
-          <Plus size={20} /> {busy ? 'Adding…' : 'Add reward'}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn btn-primary w-full sm:w-auto" disabled={busy}>
+            {editingId ? (busy ? 'Saving…' : 'Save changes') : <><Plus size={20} /> {busy ? 'Adding…' : 'Add reward'}</>}
+          </button>
+          {editingId && (
+            <button type="button" className="btn btn-ghost" onClick={stopEdit}>
+              Cancel
+            </button>
+          )}
+        </div>
       </form>
 
       {!rewards ? (
@@ -688,6 +751,9 @@ function RewardsSettings() {
                   {rewardRule({ ...r, task_title: taskTitle(r.task_id) })}, for {kidNames(r.member_ids, me?.members ?? [])}
                 </div>
               </div>
+              <button aria-label={`Change ${r.title}`} title="Change reward" className="rounded-lg p-2 text-muted hover:bg-soft hover:text-violet" onClick={() => startEdit(r)}>
+                <Pencil size={20} />
+              </button>
               <button aria-label={`Remove ${r.title}`} title="Remove reward" className="rounded-lg p-2 text-muted hover:bg-soft hover:text-danger" onClick={() => remove(r.id)}>
                 <Trash2 size={20} />
               </button>

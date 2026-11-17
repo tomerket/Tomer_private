@@ -134,8 +134,9 @@ function requireParent(req: Request): Member {
   return me;
 }
 
-async function checkAssignee(familyId: string, assignedTo: unknown): Promise<string | null> {
-  if (assignedTo === null || assignedTo === undefined || assignedTo === '') return null;
+/** Every parents task must be given to a parent in the family. */
+async function checkAssignee(familyId: string, assignedTo: unknown): Promise<string> {
+  if (assignedTo === null || assignedTo === undefined || assignedTo === '') throw new HttpError(400, 'Choose who the task is for');
   const { data } = await db()
     .from('members')
     .select('id')
@@ -148,7 +149,15 @@ async function checkAssignee(familyId: string, assignedTo: unknown): Promise<str
 }
 
 // "day" is the start date
-const PT_COLS = 'id, subject, text, day, due_date, done, done_at, assigned_to, created_by, created_at, photo_path';
+const PT_COLS = 'id, subject, text, day, due_date, done, done_at, assigned_to, created_by, created_at, photo_path, icon';
+
+/** Optional gallery picture key (null = none). */
+function parseIcon(input: unknown): string | null {
+  if (input === null || input === undefined || input === '') return null;
+  const k = String(input);
+  if (!/^[a-z0-9-]{1,30}$/.test(k)) throw new HttpError(400, 'Choose a picture');
+  return k;
+}
 
 /** Adds a short-lived private link for each task photo. */
 async function withPhotoUrls<T extends { photo_path: string | null }>(rows: T[]): Promise<(T & { photoUrl: string | null })[]> {
@@ -210,6 +219,7 @@ tasksRouter.post(
       day,
       due_date: parseDue(req.body?.dueDate, day),
       assigned_to: await checkAssignee(me.family_id, req.body?.assignedTo),
+      icon: parseIcon(req.body?.icon),
     };
     const { data, error } = await db().from('parent_tasks').insert(row).select(PT_COLS).single();
     if (error) throw error;
@@ -229,6 +239,7 @@ tasksRouter.patch(
       patch.done_at = patch.done ? new Date().toISOString() : null;
     }
     if ('assignedTo' in (req.body ?? {})) patch.assigned_to = await checkAssignee(me.family_id, req.body.assignedTo);
+    if ('icon' in (req.body ?? {})) patch.icon = parseIcon(req.body.icon);
     if ('day' in (req.body ?? {}) || 'dueDate' in (req.body ?? {})) {
       const { data: cur } = await db().from('parent_tasks').select('day, due_date').eq('id', req.params.id).eq('family_id', me.family_id).maybeSingle();
       if (!cur) throw new HttpError(404, 'Task not found');

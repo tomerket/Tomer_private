@@ -1,8 +1,10 @@
-import { CalendarRange, Camera, Check, ChevronLeft, ClipboardList, ImageOff, Pencil, Plus, Trash2, UserRound, X } from 'lucide-react';
+import { CalendarRange, Check, ChevronLeft, ClipboardList, Pencil, Plus, Trash2, UserRound, X } from 'lucide-react';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { AppLayout } from '../components/AppLayout';
 import { CheckDropdown } from '../components/CheckDropdown';
+import { PhotoSourceButton } from '../components/PhotoSourceButton';
+import { TASK_ICONS, taskIconUrl } from '../lib/taskIcons';
 import { ErrorBox } from '../components/ui';
 import { api, today } from '../lib/api';
 import { resizeImage } from '../lib/image';
@@ -20,17 +22,17 @@ type ParentTask = {
   created_by: string | null;
   created_at: string;
   photo_path: string | null;
+  icon: string | null; // gallery picture
   photoUrl: string | null;
 };
 type Filter = 'today' | 'due' | 'open';
-type Patch = Partial<{ subject: string; description: string; done: boolean; day: string; dueDate: string }>;
+type Patch = Partial<{ subject: string; description: string; done: boolean; day: string; dueDate: string; icon: string | null }>;
 
 const FILTERS: { key: Filter; label: string }[] = [
-  { key: 'today', label: 'Today' },
+  { key: 'today', label: 'Open today' },
   { key: 'due', label: 'Due today' },
   { key: 'open', label: 'All open' },
 ];
-const ANYONE = 'anyone'; // filter option for tasks not given to a specific parent
 
 const mdy = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(0, 4)}`;
 const localDay = (ts: string) => {
@@ -38,23 +40,65 @@ const localDay = (ts: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-/** Photo button: on a phone this offers the camera or the gallery; on a computer, a file. */
-function PhotoPicker({ label, onPick, disabled }: { label: string; onPick: (f: File) => void; disabled?: boolean }) {
+/**
+ * Picture for a parents task: pick one from the gallery, or use the camera button to upload a
+ * photo or take one with the phone camera.
+ */
+function PicturePicker({
+  icon,
+  photoPreview,
+  disabled,
+  onIcon,
+  onPhoto,
+  onClear,
+}: {
+  icon: string | null;
+  photoPreview: string | null;
+  disabled?: boolean;
+  onIcon: (key: string) => void;
+  onPhoto: (f: File) => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const chosen = photoPreview ?? (icon ? taskIconUrl(icon) : null);
   return (
-    <label className={`btn btn-ghost cursor-pointer py-2 ${disabled ? 'opacity-60' : ''}`}>
-      <Camera size={20} /> {label}
-      <input
-        type="file"
-        accept="image/*"
-        className="hidden"
-        disabled={disabled}
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) onPick(f);
-          e.target.value = '';
-        }}
-      />
-    </label>
+    <div>
+      <span className="label">Picture</span>
+      <div className="flex flex-wrap items-center gap-3">
+        <PhotoSourceButton label="Upload or take a photo" onPick={onPhoto} disabled={disabled} />
+        <button type="button" className="btn btn-ghost py-2" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          {open ? 'Hide pictures' : 'Choose a picture'}
+        </button>
+        {chosen && (
+          <span className="inline-flex items-center gap-2">
+            <img src={chosen} alt="Chosen picture" className="h-14 w-14 rounded-2xl object-cover ring-2 ring-violet" />
+            <button type="button" className="rounded-lg p-2 text-muted hover:bg-white hover:text-danger" title="Remove picture" aria-label="Remove picture" onClick={onClear}>
+              <Trash2 size={20} />
+            </button>
+          </span>
+        )}
+      </div>
+      {open && (
+        <div className="mt-2 grid max-h-56 grid-cols-6 gap-2 overflow-y-auto rounded-2xl bg-white p-2 sm:grid-cols-10">
+          {TASK_ICONS.map((i) => (
+            <button
+              key={i.key}
+              type="button"
+              title={i.label}
+              aria-label={i.label}
+              aria-pressed={icon === i.key}
+              onClick={() => {
+                onIcon(i.key);
+                setOpen(false);
+              }}
+              className={`grid aspect-square place-items-center rounded-xl border-2 p-1 transition ${icon === i.key ? 'border-violet bg-violet-soft' : 'border-transparent hover:bg-soft'}`}
+            >
+              <img src={taskIconUrl(i.key) ?? ''} alt="" className="h-full w-full rounded-lg object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -71,7 +115,9 @@ export default function ParentsTasks() {
   const [tasks, setTasks] = useState<ParentTask[] | null>(null);
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
-  const [assignee, setAssignee] = useState('');
+  // Every task is given to a parent; start with the parent who is signed in
+  const [assignee, setAssignee] = useState(me?.member?.role === 'parent' ? me.member.id : '');
+  const [icon, setIcon] = useState<string | null>(null);
   const [start, setStart] = useState(todayIso);
   const [end, setEnd] = useState('');
   const [photo, setPhoto] = useState<Blob | null>(null);
@@ -111,10 +157,11 @@ export default function ParentsTasks() {
     if (!subject.trim()) return setError('Please write a subject');
     if (!start || !end) return setError('Please choose a start date and an end date');
     if (end < start) return setError('The end date can’t be before the start date');
+    if (!assignee) return setError('Choose who the task is for');
     setBusy(true);
     try {
       const { task } = await api<{ task: ParentTask }>('/parent-tasks', {
-        body: { subject, description, day: start, dueDate: end, assignedTo: assignee || null },
+        body: { subject, description, day: start, dueDate: end, assignedTo: assignee, icon },
       });
       if (photo) await api(`/parent-tasks/${task.id}/photo`, { raw: photo });
       setSubject('');
@@ -123,6 +170,7 @@ export default function ParentsTasks() {
       setStart(todayIso);
       setPhoto(null);
       setPhotoPreview(null);
+      setIcon(null);
       await load();
     } catch (err) {
       setError((err as Error).message);
@@ -171,7 +219,7 @@ export default function ParentsTasks() {
       if (filter === 'due') return !t.done && t.due_date <= todayIso;
       return true;
     })
-    .filter((t) => who === null || who.includes(t.assigned_to ?? ANYONE));
+    .filter((t) => who === null || (t.assigned_to !== null && who.includes(t.assigned_to)));
   const doneCount = visible.filter((t) => t.done).length;
 
   return (
@@ -198,26 +246,25 @@ export default function ParentsTasks() {
                 onChange={(e) => setDescription(e.target.value)}
               />
             </label>
-            <div className="flex flex-wrap items-center gap-3">
-              <PhotoPicker label={photo ? 'Change photo' : 'Add a photo'} onPick={pickNewPhoto} disabled={busy} />
-              {photoPreview && (
-                <span className="inline-flex items-center gap-2">
-                  <img src={photoPreview} alt="Photo for the new task" className="h-16 w-16 rounded-2xl object-cover" />
-                  <button
-                    type="button"
-                    className="rounded-lg p-2 text-muted hover:bg-white hover:text-danger"
-                    title="Remove photo"
-                    aria-label="Remove photo"
-                    onClick={() => {
-                      setPhoto(null);
-                      setPhotoPreview(null);
-                    }}
-                  >
-                    <Trash2 size={20} />
-                  </button>
-                </span>
-              )}
-            </div>
+            <PicturePicker
+              icon={icon}
+              photoPreview={photoPreview}
+              disabled={busy}
+              onIcon={(k) => {
+                setIcon(k);
+                setPhoto(null);
+                setPhotoPreview(null);
+              }}
+              onPhoto={(f) => {
+                setIcon(null);
+                pickNewPhoto(f);
+              }}
+              onClear={() => {
+                setIcon(null);
+                setPhoto(null);
+                setPhotoPreview(null);
+              }}
+            />
             <div className="grid gap-3 sm:grid-cols-[auto_auto_1fr_auto] sm:items-end">
               <label>
                 <span className="label">Start date *</span>
@@ -227,21 +274,17 @@ export default function ParentsTasks() {
                 <span className="label">End date *</span>
                 <input type="date" required className="input !text-xl" value={end} min={start} onChange={(e) => setEnd(e.target.value)} />
               </label>
-              {parents.length > 1 ? (
-                <label>
-                  <span className="label">For</span>
-                  <select className="input !text-xl" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
-                    <option value="">Anyone</option>
-                    {parents.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : (
-                <span />
-              )}
+              <label>
+                <span className="label">For *</span>
+                <select className="input !text-xl" value={assignee} onChange={(e) => setAssignee(e.target.value)} required>
+                  <option value="">Choose a parent…</option>
+                  {parents.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button className="btn btn-primary px-8 py-4 !text-2xl" disabled={busy || !subject.trim() || !start || !end}>
                 <Plus size={22} /> {busy ? 'Adding…' : 'Add'}
               </button>
@@ -268,7 +311,7 @@ export default function ParentsTasks() {
                 ariaLabel="Show tasks for"
                 className="w-56"
                 allLabel="Everyone"
-                options={[...parents.map((p) => ({ id: p.id, label: p.name })), { id: ANYONE, label: 'Anyone (not given to someone)' }]}
+                options={parents.map((p) => ({ id: p.id, label: p.name }))}
                 selected={who}
                 onChange={setWho}
               />
@@ -390,14 +433,22 @@ function TaskItem({
                 <input type="date" className="input !text-lg" value={end} min={start} onChange={(e) => setEnd(e.target.value)} />
               </label>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <PhotoPicker label={task.photoUrl ? 'Change photo' : 'Add a photo'} onPick={(f) => onPhoto(f)} />
-              {task.photoUrl && (
-                <button className="btn btn-ghost px-3 py-2 text-muted" title="Remove photo" aria-label="Remove photo" onClick={() => onPhoto(null)}>
-                  <ImageOff size={20} />
-                </button>
-              )}
-            </div>
+            <PicturePicker
+              icon={task.icon}
+              photoPreview={task.photoUrl}
+              onIcon={(k) => {
+                onSave({ icon: k });
+                if (task.photoUrl) onPhoto(null);
+              }}
+              onPhoto={(f) => {
+                onPhoto(f);
+                if (task.icon) onSave({ icon: null });
+              }}
+              onClear={() => {
+                if (task.photoUrl) onPhoto(null);
+                if (task.icon) onSave({ icon: null });
+              }}
+            />
             <div className="flex gap-2">
               <button
                 className="btn btn-primary py-2"
@@ -427,17 +478,19 @@ function TaskItem({
                   <CalendarRange size={17} /> {mdy(task.day)} to {mdy(task.due_date)}
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <UserRound size={17} /> For <b className="text-ink">{assigneeName ?? 'anyone'}</b>
+                  <UserRound size={17} /> For <b className="text-ink">{assigneeName ?? 'not given to anyone yet'}</b>
                 </span>
                 <span>
                   Added by {creatorName ?? 'someone'} on {mdy(localDay(task.created_at))}
                 </span>
               </div>
             </div>
-            {task.photoUrl && (
+            {task.photoUrl ? (
               <a href={task.photoUrl} target="_blank" rel="noreferrer" title="Open photo" className="shrink-0">
                 <img src={task.photoUrl} alt={`Photo for ${task.subject}`} className="h-20 w-20 rounded-2xl object-cover sm:h-24 sm:w-24" />
               </a>
+            ) : (
+              task.icon && <img src={taskIconUrl(task.icon) ?? ''} alt="" className="h-20 w-20 shrink-0 rounded-2xl object-cover sm:h-24 sm:w-24" />
             )}
           </div>
         )}

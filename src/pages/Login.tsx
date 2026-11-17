@@ -63,7 +63,7 @@ export default function Login() {
 function MemberLogin() {
   const { refresh } = useSession();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ familyName: '', adminName: '', name: '', birthday: '' });
+  const [form, setForm] = useState({ familyName: '', parentName: '', name: '', birthday: '' });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -90,8 +90,8 @@ function MemberLogin() {
       <Field label="Family name">
         <input className="input" value={form.familyName} onChange={(e) => set('familyName')(e.target.value)} autoComplete="off" required />
       </Field>
-      <Field label="Super user">
-        <input className="input" value={form.adminName} onChange={(e) => set('adminName')(e.target.value)} autoComplete="off" required />
+      <Field label="Parent">
+        <input className="input" value={form.parentName} onChange={(e) => set('parentName')(e.target.value)} placeholder="Name of one of the parents" autoComplete="off" required />
       </Field>
       <Field label="Name">
         <input className="input" value={form.name} onChange={(e) => set('name')(e.target.value)} autoComplete="off" required />
