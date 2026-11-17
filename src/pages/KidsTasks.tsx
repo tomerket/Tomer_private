@@ -6,10 +6,21 @@ import { Avatar } from '../components/Face';
 import { ErrorBox } from '../components/ui';
 import { api, today } from '../lib/api';
 import { useRoles, useSession } from '../lib/session';
+import { rewardIconUrl, rewardRule, type RewardKind } from '../lib/rewardIcons';
 import { PERIODS, taskIconUrl, type Period } from '../lib/taskIcons';
 
-type Task = { id: number; title: string; icon: string; period: Period; sort_order: number; checked: boolean };
-type Reward = { id: string; title: string; min_score: number };
+type Task = { id: number; title: string; icon: string; period: Period; sort_order: number; mandatory: boolean; checked: boolean };
+type Reward = {
+  id: string;
+  title: string;
+  icon: string;
+  kind: RewardKind;
+  min_score: number | null;
+  streak_days: number | null;
+  task_title?: string;
+  streak?: number;
+  earned?: boolean; // streak rewards: worked out by the server
+};
 
 const DAYS_BACK = 5;
 
@@ -92,8 +103,11 @@ export default function KidsTasks() {
   const allDone = total > 0 && done === total;
   const kidName = kids.find((k) => k.id === kidId)?.name;
   // Next reward not reached yet, or the best one reached
-  const reached = rewards.filter((r) => done >= Math.min(r.min_score, total));
-  const nextReward = rewards.find((r) => done < Math.min(r.min_score, total));
+  const mustDoLeft = (tasks ?? []).filter((t) => t.mandatory && !t.checked).length;
+  const isEarned = (r: Reward) => (r.kind === 'streak' ? Boolean(r.earned) : total > 0 && mustDoLeft === 0 && done >= Math.min(r.min_score!, total));
+  const reached = rewards.filter(isEarned);
+  const dailyRewards = rewards.filter((r) => r.kind !== 'streak');
+  const nextReward = dailyRewards.find((r) => !isEarned(r));
   const bestReached = reached[reached.length - 1];
 
   return (
@@ -105,6 +119,8 @@ export default function KidsTasks() {
           rewards={rewards}
           done={done}
           total={total}
+          mustDoLeft={mustDoLeft}
+          isEarned={isEarned}
           onClose={() => setShowRewards(false)}
         />
       )}
@@ -132,7 +148,7 @@ export default function KidsTasks() {
           disabled={kids.length === 0}
         >
           <Gift size={22} /> Rewards
-          {reached.length > 0 && <span className="rounded-full bg-sun-soft0 px-2 text-sm text-white">{reached.length}</span>}
+          {reached.length > 0 && <span className="rounded-full bg-sun px-2 text-sm text-white">{reached.length}</span>}
         </button>
         <div className="flex items-center gap-1 rounded-xl bg-soft p-1">
           <button
@@ -167,7 +183,9 @@ export default function KidsTasks() {
                 {allDone
                   ? `Amazing, ${kidName}! All done! 🎉`
                   : nextReward
-                    ? `${kidName}, ${Math.min(nextReward.min_score, total) - done} more for ${nextReward.title}`
+                    ? Math.min(nextReward.min_score!, total) - done > 0
+                      ? `${kidName}, ${Math.min(nextReward.min_score!, total) - done} more for ${nextReward.title}`
+                      : `${kidName}, finish the must-do tasks for ${nextReward.title}`
                     : `${kidName}'s tasks`}
               </span>
               {!canEdit && (
@@ -236,6 +254,9 @@ export default function KidsTasks() {
                         >
                           <TaskPicture icon={t.icon} className={`h-16 w-16 rounded-2xl transition ${t.checked ? 'opacity-55' : ''}`} />
                           <span className={`font-display text-lg font-bold leading-tight ${t.checked ? 'text-muted' : ''}`}>{t.title}</span>
+                          {t.mandatory && (
+                            <span className="absolute left-1.5 top-1.5 rounded-full bg-danger px-2 py-0.5 text-xs font-bold text-white">Must do</span>
+                          )}
                           {/* The stamp */}
                           <span className="stamp absolute right-1.5 top-1.5 h-9 w-9" data-on={t.checked}>
                             {t.checked && <Check size={18} strokeWidth={4} className="text-white" />}
@@ -261,6 +282,8 @@ function RewardsDialog({
   rewards,
   done,
   total,
+  mustDoLeft,
+  isEarned,
   onClose,
 }: {
   kidName: string;
@@ -268,8 +291,17 @@ function RewardsDialog({
   rewards: Reward[];
   done: number;
   total: number;
+  mustDoLeft: number;
+  isEarned: (r: Reward) => boolean;
   onClose: () => void;
 }) {
+  /** What's still missing for a reward, in plain words. */
+  const missing = (r: Reward) => {
+    if (r.kind === 'streak') return `${r.streak ?? 0} of ${r.streak_days} days`;
+    const more = Math.min(r.min_score!, total) - done;
+    if (more > 0) return `${more} more`;
+    return mustDoLeft > 0 ? `${mustDoLeft} must-do left` : '';
+  };
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" role="dialog" aria-modal aria-label={`${kidName}'s rewards`} onClick={onClose}>
       <div className="panel w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
@@ -289,19 +321,22 @@ function RewardsDialog({
         ) : (
           <ul className="space-y-2">
             {rewards.map((r) => {
-              const need = Math.min(r.min_score, total);
-              const earned = total > 0 && done >= need;
+              const earned = isEarned(r);
               return (
                 <li key={r.id} className={`flex items-center gap-3 rounded-2xl border-2 p-3 ${earned ? 'border-sun bg-sun-soft' : 'border-line'}`}>
-                  <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${earned ? 'bg-sun text-white' : 'bg-soft text-muted'}`}>
-                    {earned ? <Trophy size={22} /> : <Gift size={22} />}
-                  </span>
+                  <img src={rewardIconUrl(r.icon)} alt="" className={`h-12 w-12 shrink-0 ${earned ? '' : 'opacity-60 grayscale-[40%]'}`} />
                   <div className="min-w-0 flex-1">
                     <div className="text-lg font-extrabold">{r.title}</div>
-                    <div className="text-muted">Needs {r.min_score} tasks a day</div>
+                    <div className="text-muted">{rewardRule(r)}</div>
                   </div>
                   <span className={`shrink-0 text-right font-extrabold ${earned ? 'text-sun-ink' : 'text-muted'}`}>
-                    {earned ? 'Earned! 🏆' : `${need - done} more`}
+                    {earned ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Trophy size={18} /> Earned!
+                      </span>
+                    ) : (
+                      missing(r)
+                    )}
                   </span>
                 </li>
               );

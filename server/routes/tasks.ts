@@ -1,13 +1,14 @@
-import { Router, type Request } from 'express';
+import express, { Router, type Request } from 'express';
 import { memberOf, requireCaller, type Member } from '../auth.js';
-import { db } from '../supabase.js';
+import { db, PHOTO_BUCKET } from '../supabase.js';
+import { currentStreak, REWARD_COLS, STREAK_LOOKBACK_DAYS, streaksCompleted, type RewardRow } from '../rewards.js';
 import { handle, HttpError, parseDay, requireText } from '../util.js';
 
 export const tasksRouter = Router();
 tasksRouter.use(requireCaller);
 
 const MEMBER_COLS = 'id, family_id, name, role, birthday, is_admin';
-export const TEMPLATE_COLS = 'id, title, icon, period, sort_order, member_ids';
+export const TEMPLATE_COLS = 'id, title, icon, period, sort_order, member_ids, mandatory';
 
 const DAY_MS = 86_400_000;
 const toDay = (d: Date) => d.toISOString().slice(0, 10);
@@ -54,16 +55,23 @@ tasksRouter.get(
     checkDayWindow(day);
     const [{ data: templates, error: tErr }, { data: checks, error: cErr }, { data: rewards, error: rErr }] = await Promise.all([
       db().from('kid_task_templates').select(TEMPLATE_COLS).eq('family_id', kid.family_id).is('archived_at', null).order('sort_order'),
-      db().from('kid_task_checks').select('template_id').eq('member_id', kid.id).eq('day', day),
-      db().from('kid_rewards').select('id, title, min_score, member_ids').eq('family_id', kid.family_id).is('archived_at', null).order('min_score'),
+      // Today's ticks plus enough history to work out streaks
+      db().from('kid_task_checks').select('template_id, day').eq('member_id', kid.id).gte('day', shiftDay(day, -STREAK_LOOKBACK_DAYS)).lte('day', day),
+      db().from('kid_rewards').select(REWARD_COLS).eq('family_id', kid.family_id).is('archived_at', null).order('min_score'),
     ]);
     if (tErr || cErr || rErr) throw tErr ?? cErr ?? rErr;
-    const done = new Set((checks ?? []).map((c) => c.template_id));
+    const done = new Set((checks ?? []).filter((c) => c.day === day).map((c) => c.template_id));
+    const mine = (templates ?? []).filter((t) => appliesTo(t, kid.id));
+    const daysDone = (taskId: number) => new Set((checks ?? []).filter((c) => c.template_id === taskId).map((c) => c.day));
     res.json({
-      tasks: (templates ?? [])
-        .filter((t) => appliesTo(t, kid.id))
-        .map(({ member_ids: _m, ...t }) => ({ ...t, checked: done.has(t.id) })),
-      rewards: (rewards ?? []).filter((r) => appliesTo(r, kid.id)).map(({ member_ids: _m, ...r }) => r),
+      tasks: mine.map(({ member_ids: _m, ...t }) => ({ ...t, checked: done.has(t.id) })),
+      rewards: (rewards as RewardRow[])
+        .filter((r) => appliesTo(r, kid.id) && (r.kind === 'daily' || mine.some((t) => t.id === r.task_id)))
+        .map(({ member_ids: _m, ...r }) => {
+          if (r.kind !== 'streak') return r;
+          const streak = currentStreak(daysDone(r.task_id!), day);
+          return { ...r, task_title: mine.find((t) => t.id === r.task_id)?.title, streak, earned: streak >= r.streak_days! };
+        }),
     });
   }),
 );
@@ -140,7 +148,18 @@ async function checkAssignee(familyId: string, assignedTo: unknown): Promise<str
 }
 
 // "day" is the start date
-const PT_COLS = 'id, subject, text, day, due_date, done, done_at, assigned_to, created_by, created_at';
+const PT_COLS = 'id, subject, text, day, due_date, done, done_at, assigned_to, created_by, created_at, photo_path';
+
+/** Adds a short-lived private link for each task photo. */
+async function withPhotoUrls<T extends { photo_path: string | null }>(rows: T[]): Promise<(T & { photoUrl: string | null })[]> {
+  const paths = rows.map((r) => r.photo_path).filter(Boolean) as string[];
+  const urls = new Map<string, string>();
+  if (paths.length) {
+    const { data } = await db().storage.from(PHOTO_BUCKET).createSignedUrls(paths, 60 * 60);
+    (data ?? []).forEach((d) => d.path && d.signedUrl && urls.set(d.path, d.signedUrl));
+  }
+  return rows.map((r) => ({ ...r, photoUrl: r.photo_path ? (urls.get(r.photo_path) ?? null) : null }));
+}
 
 /** Required end date; must not be before the start date. */
 function parseDue(input: unknown, start: string): string {
@@ -174,7 +193,7 @@ tasksRouter.get(
     }
     const { data, error } = await q.order('due_date', { ascending: true, nullsFirst: false }).order('day').order('created_at');
     if (error) throw error;
-    res.json({ tasks: data });
+    res.json({ tasks: await withPhotoUrls(data ?? []) });
   }),
 );
 
@@ -194,7 +213,7 @@ tasksRouter.post(
     };
     const { data, error } = await db().from('parent_tasks').insert(row).select(PT_COLS).single();
     if (error) throw error;
-    res.status(201).json({ task: data });
+    res.status(201).json({ task: { ...data, photoUrl: null } });
   }),
 );
 
@@ -227,7 +246,7 @@ tasksRouter.patch(
       .maybeSingle();
     if (error) throw error;
     if (!data) throw new HttpError(404, 'Task not found');
-    res.json({ task: data });
+    res.json({ task: (await withPhotoUrls([data]))[0] });
   }),
 );
 
@@ -235,9 +254,50 @@ tasksRouter.delete(
   '/parent-tasks/:id',
   handle(async (req, res) => {
     const me = requireParent(req);
-    const { error } = await db().from('parent_tasks').delete().eq('id', req.params.id).eq('family_id', me.family_id);
+    const { data: gone, error } = await db().from('parent_tasks').delete().eq('id', req.params.id).eq('family_id', me.family_id).select('photo_path');
     if (error) throw error;
+    const paths = (gone ?? []).map((g) => g.photo_path).filter(Boolean) as string[];
+    if (paths.length) await db().storage.from(PHOTO_BUCKET).remove(paths);
     res.json({ ok: true });
+  }),
+);
+
+// Photo on a parents task (uploaded or taken with the phone camera; resized in the browser)
+const TASK_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+async function parentTaskIn(familyId: string, id: string) {
+  const { data } = await db().from('parent_tasks').select('id, photo_path').eq('id', id).eq('family_id', familyId).maybeSingle();
+  if (!data) throw new HttpError(404, 'Task not found');
+  return data as { id: string; photo_path: string | null };
+}
+
+tasksRouter.post(
+  '/parent-tasks/:id/photo',
+  express.raw({ type: TASK_PHOTO_TYPES, limit: '4mb' }),
+  handle(async (req, res) => {
+    const me = requireParent(req);
+    const task = await parentTaskIn(me.family_id, String(req.params.id));
+    const type = (req.headers['content-type'] ?? '').split(';')[0];
+    if (!TASK_PHOTO_TYPES.includes(type) || !Buffer.isBuffer(req.body) || req.body.length === 0) throw new HttpError(400, 'Please upload a JPG, PNG or WEBP image');
+    const path = `${me.family_id}/parent-tasks/${task.id}-${Date.now()}.${type.split('/')[1].replace('jpeg', 'jpg')}`;
+    const { error: upErr } = await db().storage.from(PHOTO_BUCKET).upload(path, req.body, { contentType: type });
+    if (upErr) throw upErr;
+    const { data, error } = await db().from('parent_tasks').update({ photo_path: path }).eq('id', task.id).select(PT_COLS).single();
+    if (error) throw error;
+    if (task.photo_path) await db().storage.from(PHOTO_BUCKET).remove([task.photo_path]);
+    res.json({ task: (await withPhotoUrls([data]))[0] });
+  }),
+);
+
+tasksRouter.delete(
+  '/parent-tasks/:id/photo',
+  handle(async (req, res) => {
+    const me = requireParent(req);
+    const task = await parentTaskIn(me.family_id, String(req.params.id));
+    const { data, error } = await db().from('parent_tasks').update({ photo_path: null }).eq('id', task.id).select(PT_COLS).single();
+    if (error) throw error;
+    if (task.photo_path) await db().storage.from(PHOTO_BUCKET).remove([task.photo_path]);
+    res.json({ task: { ...data, photoUrl: null } });
   }),
 );
 
@@ -253,6 +313,7 @@ type Tpl = {
   period: (typeof PERIODS)[number];
   sort_order: number;
   member_ids: string[] | null;
+  mandatory: boolean;
   created_at: string;
   archived_at: string | null;
 };
@@ -280,16 +341,16 @@ tasksRouter.get(
     const [{ data: templates, error: tErr }, { data: checks, error: cErr }, { data: rewards, error: rErr }] = await Promise.all([
       db()
         .from('kid_task_templates')
-        .select('id, title, icon, period, sort_order, member_ids, created_at, archived_at')
+        .select('id, title, icon, period, sort_order, member_ids, mandatory, created_at, archived_at')
         .eq('family_id', me.family_id)
         .order('sort_order'),
       db()
         .from('kid_task_checks')
         .select('member_id, template_id, day')
         .in('member_id', kids.map((k) => k.id))
-        .gte('day', from)
+        .gte('day', shiftDay(from, -STREAK_LOOKBACK_DAYS)) // history before the range, for streaks
         .lte('day', to),
-      db().from('kid_rewards').select('id, title, min_score, member_ids').eq('family_id', me.family_id).is('archived_at', null).order('min_score'),
+      db().from('kid_rewards').select(REWARD_COLS).eq('family_id', me.family_id).is('archived_at', null).order('min_score'),
     ]);
     if (tErr || cErr || rErr) throw tErr ?? cErr ?? rErr;
     const done = new Set((checks ?? []).map((c) => `${c.member_id}|${c.template_id}|${c.day}`));
@@ -299,8 +360,9 @@ tasksRouter.get(
       const mine = (templates as Tpl[]).filter((t) => appliesTo(t, kid.id));
       const activeOn = (t: Tpl, day: string) =>
         day >= toDay(new Date(t.created_at)) && day >= kidStart && (!t.archived_at || day < toDay(new Date(t.archived_at)));
-      const myRewards = (rewards ?? []).filter((r) => appliesTo(r, kid.id));
-      const rewardScore = Math.min(...myRewards.map((r) => r.min_score), Infinity);
+      const myRewards = (rewards as RewardRow[]).filter((r) => appliesTo(r, kid.id) && (r.kind === 'daily' || mine.some((t) => t.id === r.task_id)));
+      const daily = myRewards.filter((r) => r.kind === 'daily');
+      const dailyEarned = new Map(daily.map((r) => [r.id, 0]));
 
       const days: { day: string; done: number; total: number; reward: boolean }[] = [];
       const perTask = new Map<number, { done: number; total: number }>();
@@ -326,7 +388,15 @@ tasksRouter.get(
           }
           perTask.set(tpl.id, s);
         }
-        const reward = Number.isFinite(rewardScore) && dTotal > 0 && dDone >= Math.min(rewardScore, dTotal);
+        // Daily rewards also need every must-do task done that day
+        const mustDoDone = mine.every((tpl) => !tpl.mandatory || !activeOn(tpl, day) || done.has(`${kid.id}|${tpl.id}|${day}`));
+        let reward = false;
+        for (const r of daily) {
+          if (dTotal > 0 && mustDoDone && dDone >= Math.min(r.min_score!, dTotal)) {
+            dailyEarned.set(r.id, dailyEarned.get(r.id)! + 1);
+            reward = true;
+          }
+        }
         days.push({ day, done: dDone, total: dTotal, reward });
       }
 
@@ -338,12 +408,24 @@ tasksRouter.get(
         days,
         periods,
         grid,
-        // Each reward: how many days in the range it was earned (ticked at least min_score, or all tasks if fewer)
+        // Each reward: how many times it was earned in the range
         rewards: myRewards.map((r) => ({
           id: r.id,
           title: r.title,
+          icon: r.icon,
+          kind: r.kind,
           min_score: r.min_score,
-          earnedDays: days.filter((d) => d.total > 0 && d.done >= Math.min(r.min_score, d.total)).length,
+          streak_days: r.streak_days,
+          task_title: r.task_id ? mine.find((t) => t.id === r.task_id)?.title : undefined,
+          earned:
+            r.kind === 'daily'
+              ? dailyEarned.get(r.id)!
+              : streaksCompleted(
+                  new Set((checks ?? []).filter((c) => c.member_id === kid.id && c.template_id === r.task_id).map((c) => c.day)),
+                  from,
+                  to,
+                  r.streak_days!,
+                ),
         })),
         tasks: mine
           .filter((t) => perTask.has(t.id))
@@ -353,11 +435,12 @@ tasksRouter.get(
           total,
           percent: total ? Math.round((totalDone / total) * 100) : null,
           perfectDays: days.filter((d) => d.total > 0 && d.done === d.total).length,
-          rewardDays: Number.isFinite(rewardScore) ? days.filter((d) => d.reward).length : null,
+          rewardsEarned: null as number | null, // filled in below
           trackedDays: days.filter((d) => d.total > 0).length,
         },
       };
     });
+    for (const k of result) k.summary.rewardsEarned = k.rewards.length ? k.rewards.reduce((a, r) => a + r.earned, 0) : null;
     res.json({ kids: result });
   }),
 );

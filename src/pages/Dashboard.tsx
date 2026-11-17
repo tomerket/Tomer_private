@@ -1,12 +1,13 @@
-import { BarChart3, Check, ChevronDown, Gift, Trophy, X } from 'lucide-react';
+import { BarChart3, ChevronDown, Gift, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppLayout } from '../components/AppLayout';
-import { Avatar } from '../components/Face';
 import { ErrorBox } from '../components/ui';
 import { api, today } from '../lib/api';
 import { useSession } from '../lib/session';
 import { PERIODS, type Period } from '../lib/taskIcons';
 import { SECTION_STYLE, TaskPicture } from './KidsTasks';
+import { CheckDropdown } from '../components/CheckDropdown';
+import { rewardIconUrl, rewardRule, type RewardKind } from '../lib/rewardIcons';
 
 type KidStats = {
   id: string;
@@ -15,8 +16,17 @@ type KidStats = {
   periods: Record<Period, { done: number; total: number }>;
   tasks: { id: number; title: string; icon: string; period: Period; archived: boolean; done: number; total: number }[];
   grid: Record<string, Record<number, 'yes' | 'no'>>;
-  rewards: { id: string; title: string; min_score: number; earnedDays: number }[];
-  summary: { done: number; total: number; percent: number | null; perfectDays: number; rewardDays: number | null; trackedDays: number };
+  rewards: {
+    id: string;
+    title: string;
+    icon: string;
+    kind: RewardKind;
+    min_score: number | null;
+    streak_days: number | null;
+    task_title?: string;
+    earned: number;
+  }[];
+  summary: { done: number; total: number; percent: number | null; perfectDays: number; rewardsEarned: number | null; trackedDays: number };
 };
 
 // Categorical series colors (validated palette), assigned by the kid's fixed position in the family
@@ -63,12 +73,6 @@ export default function Dashboard() {
     };
   }, [kids.length, selected, from, to, reload]);
 
-  function toggleKid(id: string) {
-    const cur = selected ?? kids.map((k) => k.id);
-    const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
-    if (next.length === 0) return; // keep at least one kid
-    setSelected(next.length === kids.length ? null : next);
-  }
 
   async function removeForKid(kidId: string, taskId: number, title: string, name: string) {
     if (!window.confirm(`Remove "${title}" for ${name}? Other kids keep it.`)) return;
@@ -85,7 +89,7 @@ export default function Dashboard() {
     total: stats.reduce((a, k) => a + k.summary.total, 0),
     perfect: stats.reduce((a, k) => a + k.summary.perfectDays, 0),
     tracked: stats.reduce((a, k) => a + k.summary.trackedDays, 0),
-    reward: stats.some((k) => k.summary.rewardDays !== null) ? stats.reduce((a, k) => a + (k.summary.rewardDays ?? 0), 0) : null,
+    reward: stats.some((k) => k.summary.rewardsEarned !== null) ? stats.reduce((a, k) => a + (k.summary.rewardsEarned ?? 0), 0) : null,
   };
 
   return (
@@ -98,11 +102,13 @@ export default function Dashboard() {
           <div className="flex flex-wrap items-end gap-x-4 gap-y-3 rounded-2xl bg-soft p-4">
             <div>
               <span className="label">Kids</span>
-              <KidsDropdown
-                kids={kids.map((k) => ({ id: k.id, name: k.name, color: colorOf(k.id) }))}
+              <CheckDropdown
+                ariaLabel="Kids"
+                className="filter-box"
+                allLabel="All kids"
+                options={kids.map((k) => ({ id: k.id, label: k.name, dot: colorOf(k.id) }))}
                 selected={selected}
-                onToggle={toggleKid}
-                onAll={() => setSelected(null)}
+                onChange={setSelected}
               />
             </div>
             <label>
@@ -151,11 +157,11 @@ export default function Dashboard() {
             <>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <StatTile label="Tasks done" value={`${pct(agg.done, agg.total)}%`} sub={`${agg.done} of ${agg.total} tasks`} />
-                <StatTile label="Perfect days" value={String(agg.perfect)} sub={`of ${agg.tracked} kid-days, all tasks done`} />
+                <StatTile label="Perfect days" value={String(agg.perfect)} sub="Days with every task done" />
                 <StatTile
-                  label="Reward days"
+                  label="Rewards earned"
                   value={agg.reward === null ? '–' : String(agg.reward)}
-                  sub={agg.reward === null ? 'Add rewards in Settings' : `of ${agg.tracked} kid-days, reward earned`}
+                  sub={agg.reward === null ? 'Add rewards in Settings' : 'In these dates, all selected kids'}
                 />
               </div>
 
@@ -166,7 +172,7 @@ export default function Dashboard() {
                 <PeriodChart stats={stats} colorOf={colorOf} />
               </div>
 
-              <RewardsSummary stats={stats} />
+              <RewardsTotals stats={stats} colorOf={colorOf} />
 
               <TaskPercent stats={stats} colorOf={colorOf} onRemove={removeForKid} />
             </>
@@ -318,103 +324,6 @@ function PeriodChart({ stats, colorOf }: { stats: KidStats[]; colorOf: (id: stri
   );
 }
 
-/** Each kid's rewards and how many days in the chosen dates they earned each one. */
-function RewardsSummary({ stats }: { stats: KidStats[] }) {
-  const { me } = useSession();
-  const photo = (id: string) => me?.members.find((m) => m.id === id)?.photoUrl;
-  return (
-    <section>
-      <h3 className="mb-3 flex items-center gap-2 text-xl font-extrabold">
-        <Gift className="text-sun" /> Rewards
-      </h3>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {stats.map((k) => (
-          <div key={k.id} className="rounded-2xl border-2 border-sun/40 bg-sun-soft p-4">
-            <div className="mb-2 flex items-center gap-2 text-lg font-extrabold">
-              <Avatar name={k.name} photoUrl={photo(k.id)} role="kid" size={34} /> {k.name}
-            </div>
-            {k.rewards.length === 0 ? (
-              <p className="text-muted">No rewards for {k.name} yet (add them in Settings).</p>
-            ) : (
-              <ul className="space-y-1.5">
-                {k.rewards.map((r) => (
-                  <li key={r.id} className="flex items-center gap-2">
-                    <Trophy size={18} className={r.earnedDays ? 'text-sun' : 'text-muted'} />
-                    <span className="min-w-0 flex-1">
-                      <span className="font-bold">{r.title}</span> <span className="text-sm text-muted">({r.min_score} tasks a day)</span>
-                    </span>
-                    <span className="whitespace-nowrap font-extrabold text-ink">
-                      earned {r.earnedDays}/{k.summary.trackedDays} days
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-/** Kids picker: a dropdown list where each name is ticked (✓) on or off. */
-function KidsDropdown({
-  kids,
-  selected,
-  onToggle,
-  onAll,
-}: {
-  kids: { id: string; name: string; color: string }[];
-  selected: string[] | null;
-  onToggle: (id: string) => void;
-  onAll: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const close = (e: PointerEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
-    window.addEventListener('pointerdown', close);
-    return () => window.removeEventListener('pointerdown', close);
-  }, [open]);
-  const isOn = (id: string) => selected === null || selected.includes(id);
-  const label = selected === null ? 'All kids' : kids.filter((k) => selected.includes(k.id)).map((k) => k.name).join(', ');
-  const box = (on: boolean) => (
-    <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border-2 ${on ? 'border-violet bg-violet' : 'border-line bg-white'}`}>
-      {on && <Check size={16} strokeWidth={4} className="text-white" />}
-    </span>
-  );
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-        className="input filter-box flex items-center gap-2 text-left"
-      >
-        <span className="truncate">{label}</span>
-        <ChevronDown size={18} className="ml-auto shrink-0 text-muted" />
-      </button>
-      {open && (
-        <div role="listbox" aria-multiselectable className="absolute left-0 top-full z-20 mt-1 w-64 rounded-xl bg-white p-2 shadow-xl ring-1 ring-line">
-          <button type="button" className="flex w-full items-center gap-3 rounded-lg px-2 py-2 font-bold hover:bg-soft" onClick={onAll}>
-            {box(selected === null)} All kids
-          </button>
-          <div className="my-1 h-px bg-line" />
-          {kids.map((k) => (
-            <button key={k.id} type="button" role="option" aria-selected={isOn(k.id)} className="flex w-full items-center gap-3 rounded-lg px-2 py-2 font-semibold hover:bg-soft" onClick={() => onToggle(k.id)}>
-              {box(isOn(k.id))}
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: k.color }} />
-              {k.name}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /**
  * Task by task: % done per kid, grouped into Morning / During the day / Evening in their colors.
  * Closed by default (click to open). One table, so every kid's % sits in the same column,
@@ -513,6 +422,74 @@ function TaskPercent({
                 </tbody>
               );
             })}
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Accumulated rewards: how many times each reward was earned in the chosen dates, per kid. */
+function RewardsTotals({ stats, colorOf }: { stats: KidStats[]; colorOf: (id: string) => string }) {
+  const all = new Map<string, KidStats['rewards'][number]>();
+  stats.forEach((k) => k.rewards.forEach((r) => all.has(r.id) || all.set(r.id, r)));
+  const rows = [...all.values()];
+  return (
+    <section className="overflow-hidden rounded-2xl border-2 border-sun/40">
+      <h3 className="flex items-center gap-2 bg-sun-soft px-4 py-3 text-xl font-extrabold">
+        <Gift className="text-sun-ink" /> Rewards earned
+      </h3>
+      {rows.length === 0 ? (
+        <p className="px-4 py-4 text-muted">No rewards yet. Add them in Settings.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full table-fixed text-left">
+            <colgroup>
+              <col />
+              {stats.map((k) => (
+                <col key={k.id} className="w-28" />
+              ))}
+              <col className="w-24" />
+            </colgroup>
+            <thead>
+              <tr className="text-sm">
+                <th className="px-4 py-2 font-bold text-muted">Reward</th>
+                {stats.map((k) => (
+                  <th key={k.id} className="px-3 py-2 text-right font-extrabold">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: colorOf(k.id) }} />
+                      {k.name}
+                    </span>
+                  </th>
+                ))}
+                <th className="px-4 py-2 text-right font-extrabold">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const counts = stats.map((k) => k.rewards.find((x) => x.id === r.id)?.earned);
+                const total = counts.reduce<number>((a, c) => a + (c ?? 0), 0);
+                return (
+                  <tr key={r.id} className="border-t border-line">
+                    <td className="px-4 py-2">
+                      <div className="flex items-center gap-3">
+                        <img src={rewardIconUrl(r.icon)} alt="" className="h-10 w-10 shrink-0" />
+                        <div className="min-w-0">
+                          <div className="truncate font-bold">{r.title}</div>
+                          <div className="truncate text-sm text-muted">{rewardRule(r)}</div>
+                        </div>
+                      </div>
+                    </td>
+                    {counts.map((c, i) => (
+                      <td key={stats[i].id} className="px-3 text-right text-xl font-extrabold tabular-nums" title={c === undefined ? 'Not for this kid' : `${stats[i].name}: earned ${c} times`}>
+                        {c === undefined ? <span className="text-muted">–</span> : c}
+                      </td>
+                    ))}
+                    <td className="px-4 text-right text-xl font-extrabold tabular-nums text-sun-ink">{total}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
           </table>
         </div>
       )}
