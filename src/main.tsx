@@ -2,6 +2,7 @@ import { StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import './index.css';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Spinner } from './components/ui';
 import { SessionProvider, useSession } from './lib/session';
 import Dashboard from './pages/Dashboard';
@@ -69,9 +70,11 @@ function App() {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
+      <ErrorBoundary>
       <SessionProvider>
         <App />
       </SessionProvider>
+      </ErrorBoundary>
     </BrowserRouter>
   </StrictMode>,
 );
