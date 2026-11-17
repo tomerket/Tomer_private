@@ -5,6 +5,7 @@ import { AppLayout } from '../components/AppLayout';
 import { CheckDropdown } from '../components/CheckDropdown';
 import { PhotoSourceButton } from '../components/PhotoSourceButton';
 import { TASK_ICONS, taskIconUrl } from '../lib/taskIcons';
+import { useConfirm } from '../components/ConfirmDialog';
 import { ErrorBox } from '../components/ui';
 import { api, today } from '../lib/api';
 import { resizeImage } from '../lib/image';
@@ -104,6 +105,7 @@ function PicturePicker({
 
 export default function ParentsTasks() {
   const { me } = useSession();
+  const [confirmDialog, confirm] = useConfirm();
   const canEdit = me?.member?.role === 'parent';
   const members = me?.members ?? [];
   const parents = members.filter((m) => m.role === 'parent');
@@ -202,7 +204,7 @@ export default function ParentsTasks() {
   }
 
   async function remove(id: string) {
-    if (!window.confirm('Delete this task?')) return;
+    if (!(await confirm({ title: 'Delete this task?', confirmLabel: 'Yes, delete' }))) return;
     setError(null);
     try {
       await api(`/parent-tasks/${id}`, { method: 'DELETE' });
@@ -224,6 +226,7 @@ export default function ParentsTasks() {
 
   return (
     <AppLayout title="Parents Tasks" icon={<ClipboardList className="text-violet" />}>
+      {confirmDialog}
       <Link to="/tasks" className="mb-4 inline-flex items-center gap-1 text-xl font-bold text-violet hover:underline">
         <ChevronLeft size={24} /> Family Tasks
       </Link>

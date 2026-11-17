@@ -1,6 +1,7 @@
 import { Camera, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { AppLayout } from '../components/AppLayout';
+import { useConfirm } from '../components/ConfirmDialog';
 import { Avatar } from '../components/Face';
 import { api } from '../lib/api';
 import { resizeImage } from '../lib/image';
@@ -13,6 +14,7 @@ export default function Home() {
   const { me, refresh } = useSession();
   const { isAdmin } = useRoles();
   const [busy, setBusy] = useState(false);
+  const [confirmDialog, confirm] = useConfirm();
   const [error, setError] = useState<string | null>(null);
   if (!me?.family) return null;
   const hasPhoto = Boolean(me.family.photoUrl);
@@ -32,7 +34,7 @@ export default function Home() {
   }
 
   async function removePhoto() {
-    if (!window.confirm('Remove the family photo? A sample photo will be shown until you add a new one.')) return;
+    if (!(await confirm({ title: 'Remove the family photo?', text: 'A sample picture is shown until you add a new one.' }))) return;
     setError(null);
     setBusy(true);
     try {
@@ -47,6 +49,7 @@ export default function Home() {
 
   return (
     <AppLayout title="Home" flush>
+      {confirmDialog}
       <div className="flex flex-1 flex-col px-4 pb-4 pt-4 sm:px-8 sm:pt-6">
         {/* Title */}
         <div className="flex items-start gap-3">
