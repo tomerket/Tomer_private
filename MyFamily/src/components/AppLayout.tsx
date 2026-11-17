@@ -1,4 +1,4 @@
-import { CalendarDays, ClipboardCheck, Home, LogOut, Menu, Settings, ShoppingCart, UtensilsCrossed, X, type LucideIcon } from 'lucide-react';
+import { CalendarDays, ClipboardCheck, HelpCircle, Home, LogOut, Menu, Settings, ShoppingCart, UtensilsCrossed, X, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useRoles, useSession } from '../lib/session';
@@ -12,6 +12,7 @@ const NAV: NavItem[] = [
   { to: '/calendar', label: 'Calendar', icon: CalendarDays, show: 'all' },
   { to: '/shopping', label: 'Shopping List', icon: ShoppingCart, show: 'all' },
   { to: '/settings', label: 'Settings', icon: Settings, show: 'admin' },
+  { to: '/help', label: 'Help', icon: HelpCircle, show: 'all' },
 ];
 const SOON = [{ label: 'Food menu', icon: UtensilsCrossed }];
 
