@@ -24,10 +24,9 @@ type KidStats = {
     kind: RewardKind;
     min_score: number | null;
     streak_days: number | null;
-    task_title?: string;
-    earned: number;
+    earned: number; // days it was earned in the dates chosen
   }[];
-  summary: { done: number; total: number; percent: number | null; perfectDays: number; rewardsEarned: number | null; trackedDays: number };
+  summary: { done: number; total: number; percent: number | null; trackedDays: number };
 };
 
 // Categorical series colors (validated palette), assigned by the kid's fixed position in the family
@@ -89,10 +88,9 @@ export default function Dashboard() {
   const agg = stats && {
     done: stats.reduce((a, k) => a + k.summary.done, 0),
     total: stats.reduce((a, k) => a + k.summary.total, 0),
-    perfect: stats.reduce((a, k) => a + k.summary.perfectDays, 0),
-    tracked: stats.reduce((a, k) => a + k.summary.trackedDays, 0),
-    reward: stats.some((k) => k.summary.rewardsEarned !== null) ? stats.reduce((a, k) => a + (k.summary.rewardsEarned ?? 0), 0) : null,
   };
+  // Every chart follows the dates filter; this says which dates are shown
+  const rangeText = from === to ? `${weekday(from)} ${md(from)}` : `${md(from)} to ${md(to)}`;
 
   return (
     <AppLayout title="Dashboard" icon={<BarChart3 className="text-violet" />}>
@@ -158,28 +156,23 @@ export default function Dashboard() {
             <div className="rounded-2xl border-2 border-dashed border-line py-12 text-center text-lg text-muted">No tasks were on the list in these dates.</div>
           ) : (
             <>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <StatTile label="Tasks done" value={`${pct(agg.done, agg.total)}%`} sub={`${agg.done} of ${agg.total} tasks`} />
-                <StatTile label="Perfect days" value={String(agg.perfect)} sub="Days with every task done" />
-                <StatTile
-                  label="Rewards earned"
-                  value={agg.reward === null ? '–' : String(agg.reward)}
-                  sub={agg.reward === null ? 'Add rewards in Settings' : 'In these dates, all selected kids'}
-                />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <StatTile label="Tasks done" value={`${pct(agg.done, agg.total)}%`} sub={`${agg.done} of ${agg.total} tasks, ${rangeText}`} />
+                <RewardTiles stats={stats} />
               </div>
 
               {stats.length > 1 && <Legend kids={stats.map((k) => ({ name: k.name, color: colorOf(k.id) }))} />}
 
               <div className="grid gap-5 xl:grid-cols-2">
-                <LineChart stats={stats} colorOf={colorOf} />
-                <PeriodChart stats={stats} colorOf={colorOf} />
+                <LineChart stats={stats} colorOf={colorOf} rangeText={rangeText} />
+                <PeriodChart stats={stats} colorOf={colorOf} rangeText={rangeText} />
               </div>
 
-              <TaskRateChart stats={stats} />
+              <TaskRateChart stats={stats} rangeText={rangeText} />
 
-              <RewardsTotals stats={stats} colorOf={colorOf} />
+              <RewardsTotals stats={stats} colorOf={colorOf} rangeText={rangeText} />
 
-              <TaskPercent stats={stats} colorOf={colorOf} onRemove={removeForKid} />
+              <TaskPercent stats={stats} colorOf={colorOf} onRemove={removeForKid} rangeText={rangeText} />
             </>
           )}
         </div>
@@ -198,6 +191,38 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub: st
   );
 }
 
+/** One tile per reward: on how many days it was earned, added up for the selected kids. */
+function RewardTiles({ stats }: { stats: KidStats[] }) {
+  const all = new Map<string, { title: string; icon: string; earned: number }>();
+  stats.forEach((k) =>
+    k.rewards.forEach((r) => {
+      const s = all.get(r.id) ?? { title: r.title, icon: r.icon, earned: 0 };
+      s.earned += r.earned;
+      all.set(r.id, s);
+    }),
+  );
+  if (all.size === 0) return <StatTile label="Rewards earned" value="–" sub="Add rewards in Settings" />;
+  return (
+    <>
+      {[...all.entries()].map(([id, r]) => (
+        <div key={id} className="flex items-center gap-3 rounded-2xl bg-sun-soft p-4">
+          <img src={rewardIconUrl(r.icon)} alt="" className="h-14 w-14 shrink-0 rounded-xl object-cover" />
+          <div className="min-w-0">
+            <div className="truncate text-sm font-bold text-muted">{r.title}</div>
+            <div className="text-4xl font-extrabold text-ink tabular-nums">{r.earned}</div>
+            <div className="text-muted">{r.earned === 1 ? 'time earned' : 'times earned'}</div>
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+/** Small caption under a chart title naming the dates it shows. */
+function Range({ text }: { text: string }) {
+  return <span className="text-sm font-semibold text-muted">{text}</span>;
+}
+
 function Legend({ kids }: { kids: { name: string; color: string }[] }) {
   return (
     <div className="flex flex-wrap gap-4" aria-label="Legend">
@@ -212,7 +237,7 @@ function Legend({ kids }: { kids: { name: string; color: string }[] }) {
 }
 
 /** Daily completion %, one line per kid, with a hover crosshair + tooltip. */
-function LineChart({ stats, colorOf }: { stats: KidStats[]; colorOf: (id: string) => string }) {
+function LineChart({ stats, colorOf, rangeText }: { stats: KidStats[]; colorOf: (id: string) => string; rangeText: string }) {
   const days = stats[0].days.map((d) => d.day);
   const W = 640, H = 240, L = 40, R = 12, T = 12, B = 28;
   const x = (i: number) => L + (days.length === 1 ? (W - L - R) / 2 : (i * (W - L - R)) / (days.length - 1));
@@ -230,7 +255,10 @@ function LineChart({ stats, colorOf }: { stats: KidStats[]; colorOf: (id: string
 
   return (
     <section className="rounded-2xl border-2 border-line p-4">
-      <h3 className="text-xl font-extrabold">Tasks done per day</h3>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-xl font-extrabold">Tasks done per day</h3>
+        <Range text={rangeText} />
+      </div>
       <div className="relative">
         <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="w-full touch-none" onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHover(null)} role="img" aria-label="Percent of tasks done per day">
           {[0, 50, 100].map((g) => (
@@ -289,11 +317,14 @@ function LineChart({ stats, colorOf }: { stats: KidStats[]; colorOf: (id: string
 }
 
 /** Completion by Morning / Day / Evening: grouped horizontal bars, one per kid. */
-function PeriodChart({ stats, colorOf }: { stats: KidStats[]; colorOf: (id: string) => string }) {
+function PeriodChart({ stats, colorOf, rangeText }: { stats: KidStats[]; colorOf: (id: string) => string; rangeText: string }) {
   const [hover, setHover] = useState<string | null>(null);
   return (
     <section className="rounded-2xl border-2 border-line p-4">
-      <h3 className="mb-3 text-xl font-extrabold">By time of day</h3>
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-xl font-extrabold">By time of day</h3>
+        <Range text={rangeText} />
+      </div>
       <div className="space-y-4">
         {PERIODS.map((p) => (
           <div key={p.key}>
@@ -330,7 +361,7 @@ function PeriodChart({ stats, colorOf }: { stats: KidStats[]; colorOf: (id: stri
 }
 
 /**
- * Task by task: % done per kid, grouped into Morning / During the day / Evening in their colors.
+ * Tasks Breakdown: % done per kid, grouped into Morning / During the day / Evening in their colors.
  * Closed by default (click to open). One table, so every kid's % sits in the same column,
  * with kid names once at the top.
  */
@@ -338,10 +369,12 @@ function TaskPercent({
   stats,
   colorOf,
   onRemove,
+  rangeText,
 }: {
   stats: KidStats[];
   colorOf: (id: string) => string;
   onRemove: (kidId: string, taskId: number, title: string, name: string) => void;
+  rangeText: string;
 }) {
   const [open, setOpen] = useState(false);
   const all = new Map<number, KidStats['tasks'][number]>();
@@ -354,8 +387,11 @@ function TaskPercent({
         onClick={() => setOpen((o) => !o)}
       >
         <ChevronDown size={22} className={`transition ${open ? '' : '-rotate-90'}`} />
-        Task by task (% done)
-        <span className="ml-auto text-base font-semibold text-muted">{open ? 'Hide' : 'Show'}</span>
+        Tasks Breakdown
+        <span className="ml-auto flex items-baseline gap-3 text-base font-semibold text-muted">
+          <Range text={rangeText} />
+          {open ? 'Hide' : 'Show'}
+        </span>
       </button>
       {open && (
         <div className="overflow-x-auto border-t border-line">
@@ -434,16 +470,19 @@ function TaskPercent({
   );
 }
 
-/** Accumulated rewards: how many times each reward was earned in the chosen dates, per kid. */
-function RewardsTotals({ stats, colorOf }: { stats: KidStats[]; colorOf: (id: string) => string }) {
+/** Rewards per kid: on how many days each reward was earned in the chosen dates (once a day at most). */
+function RewardsTotals({ stats, colorOf, rangeText }: { stats: KidStats[]; colorOf: (id: string) => string; rangeText: string }) {
   const all = new Map<string, KidStats['rewards'][number]>();
   stats.forEach((k) => k.rewards.forEach((r) => all.has(r.id) || all.set(r.id, r)));
   const rows = [...all.values()];
   return (
     <section className="overflow-hidden rounded-2xl border-2 border-sun/40">
-      <h3 className="flex items-center gap-2 bg-sun-soft px-4 py-3 text-xl font-extrabold">
-        <Gift className="text-sun-ink" /> Rewards earned
-      </h3>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 bg-sun-soft px-4 py-3">
+        <h3 className="flex items-center gap-2 text-xl font-extrabold">
+          <Gift className="text-sun-ink" /> Rewards earned per kid
+        </h3>
+        <span className="text-sm font-semibold text-muted">Days earned, {rangeText}. Each reward can be earned once a day.</span>
+      </div>
       {rows.length === 0 ? (
         <p className="px-4 py-4 text-muted">No rewards yet. Add them in Settings.</p>
       ) : (
@@ -486,7 +525,7 @@ function RewardsTotals({ stats, colorOf }: { stats: KidStats[]; colorOf: (id: st
                       </div>
                     </td>
                     {counts.map((c, i) => (
-                      <td key={stats[i].id} className="px-3 text-right text-xl font-extrabold tabular-nums" title={c === undefined ? 'Not for this kid' : `${stats[i].name}: earned ${c} times`}>
+                      <td key={stats[i].id} className="px-3 text-right text-xl font-extrabold tabular-nums" title={c === undefined ? 'Not for this kid' : `${stats[i].name}: earned on ${c} ${c === 1 ? 'day' : 'days'}`}>
                         {c === undefined ? <span className="text-muted">–</span> : c}
                       </td>
                     ))}
@@ -503,7 +542,7 @@ function RewardsTotals({ stats, colorOf }: { stats: KidStats[]; colorOf: (id: st
 }
 
 /** Task rate: a bar chart of how often each task was completed (all selected kids together), best first. */
-function TaskRateChart({ stats }: { stats: KidStats[] }) {
+function TaskRateChart({ stats, rangeText }: { stats: KidStats[]; rangeText: string }) {
   const [hover, setHover] = useState<number | null>(null);
   const totals = new Map<number, { title: string; icon: string; done: number; total: number }>();
   stats.forEach((k) =>
@@ -522,7 +561,7 @@ function TaskRateChart({ stats }: { stats: KidStats[] }) {
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-xl font-extrabold">Task rate</h3>
         <span className="text-muted" aria-live="polite">
-          {shown ? `${shown.title}: done ${shown.done} of ${shown.total} times (${pct(shown.done, shown.total)}%)` : 'How often each task was completed, best first'}
+          {shown ? `${shown.title}: done ${shown.done} of ${shown.total} times (${pct(shown.done, shown.total)}%)` : `How often each task was completed, ${rangeText}`}
         </span>
       </div>
       <div className="overflow-x-auto">

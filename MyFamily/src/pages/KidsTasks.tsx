@@ -17,9 +17,6 @@ type Reward = {
   kind: RewardKind;
   min_score: number | null;
   streak_days: number | null;
-  task_title?: string;
-  streak?: number;
-  earned?: boolean; // streak rewards: worked out by the server
 };
 
 const DAYS_BACK = 5;
@@ -104,10 +101,10 @@ export default function KidsTasks() {
   const kidName = kids.find((k) => k.id === kidId)?.name;
   // Next reward not reached yet, or the best one reached
   const mustDoLeft = (tasks ?? []).filter((t) => t.mandatory && !t.checked).length;
-  const isEarned = (r: Reward) => (r.kind === 'streak' ? Boolean(r.earned) : total > 0 && mustDoLeft === 0 && done >= Math.min(r.min_score!, total));
+  // Rewards are per day: worked out only from the tasks of the day shown (today by default)
+  const isEarned = (r: Reward) => total > 0 && mustDoLeft === 0 && done >= Math.min(r.min_score!, total);
   const reached = rewards.filter(isEarned);
-  const dailyRewards = rewards.filter((r) => r.kind !== 'streak');
-  const nextReward = dailyRewards.find((r) => !isEarned(r));
+  const nextReward = rewards.find((r) => !isEarned(r));
   const bestReached = reached[reached.length - 1];
 
   return (
@@ -297,7 +294,6 @@ function RewardsDialog({
 }) {
   /** What's still missing for a reward, in plain words. */
   const missing = (r: Reward) => {
-    if (r.kind === 'streak') return `${r.streak ?? 0} of ${r.streak_days} days`;
     const more = Math.min(r.min_score!, total) - done;
     if (more > 0) return `${more} more`;
     return mustDoLeft > 0 ? `${mustDoLeft} must-do left` : '';
@@ -314,7 +310,7 @@ function RewardsDialog({
           </button>
         </div>
         <p className="mb-4 text-muted">
-          {dayText}: {done} of {total} tasks done
+          {dayText}: {done} of {total} tasks done. Rewards start again every day.
         </p>
         {rewards.length === 0 ? (
           <p className="rounded-2xl bg-soft p-4 text-center text-lg text-muted">No rewards yet. Ask a parent to add one in Settings.</p>
@@ -332,7 +328,7 @@ function RewardsDialog({
                   <span className={`shrink-0 text-right font-extrabold ${earned ? 'text-sun-ink' : 'text-muted'}`}>
                     {earned ? (
                       <span className="inline-flex items-center gap-1">
-                        <Trophy size={18} /> Earned!
+                        <Trophy size={18} /> {dayText.startsWith('Today') ? 'Earned today!' : 'Earned!'}
                       </span>
                     ) : (
                       missing(r)
