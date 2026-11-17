@@ -1,0 +1,345 @@
+import { Check, ChevronLeft, ChevronRight, Plus, ShoppingCart, Trash2, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { AppLayout } from '../components/AppLayout';
+import { useConfirm } from '../components/ConfirmDialog';
+import { ErrorBox } from '../components/ui';
+import { api } from '../lib/api';
+import { colorFor, useCategories } from '../lib/categories';
+import { useSession } from '../lib/session';
+
+type Item = { id: string; category: string; name: string; bought: boolean; bought_at: string | null; created_by: string | null; created_at: string };
+
+
+export default function Shopping() {
+  const { me } = useSession();
+  const [confirmDialog, confirm] = useConfirm();
+  const cats = useCategories('shopping');
+  const [items, setItems] = useState<Item[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [category, setCategory] = useState('');
+  const [product, setProduct] = useState('');
+  const [newCat, setNewCat] = useState<string | null>(null); // typing a new category
+  const [busy, setBusy] = useState(false);
+  const categoryRef = useRef<HTMLSelectElement>(null);
+  const productRef = useRef<HTMLTextAreaElement>(null);
+  const isParent = me?.member?.role === 'parent';
+  const canRemove = (i: Item) => isParent || i.created_by === me?.member?.id;
+
+  useEffect(() => {
+    api<{ items: Item[] }>('/shopping')
+      .then((r) => setItems(r.items))
+      .catch((e) => setError((e as Error).message));
+  }, []);
+
+  // One column per category: the family's categories first, then any older ones still on the list
+  const columns = useMemo(() => {
+    const names = [...cats.names];
+    (items ?? []).forEach((i) => names.some((n) => n.toLowerCase() === i.category.toLowerCase()) || names.push(i.category));
+    return names.map((name) => ({
+      name,
+      id: cats.categories.find((c) => c.name === name)?.id ?? null,
+      items: (items ?? []).filter((i) => i.category.toLowerCase() === name.toLowerCase()),
+    }));
+  }, [cats.names, cats.categories, items]);
+  const allNames = columns.map((c) => c.name);
+  const boughtCount = (items ?? []).filter((i) => i.bought).length;
+
+  async function addCategory() {
+    const name = (newCat ?? '').trim();
+    if (!name) return setNewCat(null);
+    setError(null);
+    try {
+      const added = await cats.add(name);
+      setCategory(added);
+      setNewCat(null);
+      productRef.current?.focus();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    // One product per line (commas work too): "Milk\nEggs\nBread" adds three products
+    const names = product
+      .split(/[\n,]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (!category) return setError('Choose a category');
+    if (names.length === 0) return setError('Write a product');
+    setBusy(true);
+    try {
+      const r = await api<{ items: Item[] }>('/shopping', { body: { category, names } });
+      setItems((l) => [...(l ?? []), ...r.items]);
+      // Start fresh for the next one
+      setProduct('');
+      setCategory('');
+      categoryRef.current?.focus();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggle(i: Item) {
+    const bought = !i.bought;
+    setItems((l) => l?.map((x) => (x.id === i.id ? { ...x, bought } : x)) ?? null);
+    try {
+      await api(`/shopping/${i.id}`, { method: 'PATCH', body: { bought } });
+    } catch (err) {
+      setItems((l) => l?.map((x) => (x.id === i.id ? { ...x, bought: !bought } : x)) ?? null);
+      setError((err as Error).message);
+    }
+  }
+
+  /** Removes right away; puts things back if the server says no. */
+  async function removeWhere(match: (i: Item) => boolean, path: string) {
+    setError(null);
+    const before = items;
+    setItems((l) => l?.filter((x) => !match(x)) ?? null);
+    try {
+      await api(path, { method: 'DELETE' });
+    } catch (err) {
+      setItems(before);
+      setError((err as Error).message);
+    }
+  }
+
+  const removeOne = (i: Item) => removeWhere((x) => x.id === i.id, `/shopping/${i.id}`);
+
+  async function clearBought(cat?: string) {
+    const n = (items ?? []).filter((i) => i.bought && (!cat || i.category === cat)).length;
+    if (!(await confirm({ title: `Remove ${n} bought ${n === 1 ? 'product' : 'products'}?`, text: cat ? `From ${cat}.` : 'From every category.' }))) return;
+    removeWhere((x) => x.bought && (!cat || x.category === cat), `/shopping?scope=bought${cat ? `&category=${encodeURIComponent(cat)}` : ''}`);
+  }
+
+  async function clearAll(cat?: string) {
+    if (!(await confirm({ title: cat ? `Empty the "${cat}" list?` : 'Delete the whole shopping list?', text: 'This removes every product, bought or not.', confirmLabel: 'Yes, delete' }))) return;
+    removeWhere((x) => !cat || x.category === cat, `/shopping?scope=all${cat ? `&category=${encodeURIComponent(cat)}` : ''}`);
+  }
+
+  async function removeCategory(id: string, name: string) {
+    if (!(await confirm({ title: `Remove the "${name}" category?`, confirmLabel: 'Yes, remove' }))) return;
+    try {
+      await cats.remove(id);
+      if (category === name) setCategory('');
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  return (
+    <AppLayout title="Shopping List" icon={<ShoppingCart className="text-violet" />}>
+      {confirmDialog}
+      <form onSubmit={add} className="mb-5 space-y-3 rounded-[28px] bg-soft p-4 sm:p-5">
+        <div className="text-2xl font-extrabold">Add to the list</div>
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)_auto] xl:items-start">
+          <div>
+            <span className="label">Category *</span>
+            {newCat === null ? (
+              <div className="flex gap-2">
+                <select ref={categoryRef} className="input min-w-0 flex-1" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
+                  <option value="">Choose…</option>
+                  {allNames.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                <button type="button" className="btn btn-ghost shrink-0 px-3" onClick={() => setNewCat('')} title="Add a new category">
+                  <Plus size={18} /> New
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  className="input min-w-0 flex-1"
+                  autoFocus
+                  maxLength={30}
+                  placeholder="New category, e.g. Pharmacy"
+                  aria-label="New category name"
+                  value={newCat}
+                  onChange={(e) => setNewCat(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addCategory();
+                    }
+                    if (e.key === 'Escape') setNewCat(null);
+                  }}
+                />
+                <button type="button" className="btn btn-primary shrink-0 px-3" onClick={addCategory}>
+                  Save
+                </button>
+                <button type="button" className="btn btn-ghost shrink-0 px-3" aria-label="Cancel new category" onClick={() => setNewCat(null)}>
+                  <X size={18} />
+                </button>
+              </div>
+            )}
+          </div>
+          <label className="block">
+            <span className="label">Products *</span>
+            <textarea
+              ref={productRef}
+              className="input min-h-[110px] resize-y"
+              maxLength={1200}
+              placeholder={'One product per line, e.g.\nMilk\nEggs\nBread'}
+              value={product}
+              onChange={(e) => setProduct(e.target.value)}
+              onKeyDown={(e) => {
+                // Ctrl/Cmd + Enter adds; plain Enter starts the next line
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
+                }
+              }}
+            />
+          </label>
+          <button className="btn btn-primary xl:mt-7"disabled={busy || !category || !product.trim() || newCat !== null}>
+            <Plus size={20} /> {busy ? 'Adding…' : 'Add'}
+          </button>
+        </div>
+        <p className="text-sm text-muted">
+          {allNames.length === 0 ? 'Start with “+ New” to add your first category, e.g. Groceries.' : 'Write one product per line. Each one goes on its own line in the list.'}
+        </p>
+      </form>
+
+      <ErrorBox message={error} />
+
+      {!items ? (
+        !error && <div className="py-10 text-center text-muted">Loading…</div>
+      ) : (
+        <>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="text-lg font-bold text-muted">
+              {items.length === 0 ? 'The list is empty. Add the first product above.' : `${items.length - boughtCount} to buy${boughtCount > 0 ? `, ${boughtCount} bought` : ''}`}
+            </span>
+            {isParent && items.length > 0 && (
+              <div className="ml-auto flex flex-wrap gap-2">
+                {boughtCount > 0 && (
+                  <button className="btn btn-ghost px-4 py-2" onClick={() => clearBought()}>
+                    <Check size={18} /> Remove bought
+                  </button>
+                )}
+                <button className="btn btn-ghost px-4 py-2 text-danger" onClick={() => clearAll()}>
+                  <Trash2 size={18} /> Delete whole list
+                </button>
+              </div>
+            )}
+          </div>
+
+          <Columns count={columns.length}>
+            {columns.map((col) => {
+              const c = colorFor(col.name, allNames);
+              const left = col.items.filter((i) => !i.bought).length;
+              const anyBought = col.items.length > left;
+              return (
+                <section key={col.name} className="flex flex-col overflow-hidden rounded-2xl border-2 bg-white" style={{ borderColor: c.bg }}>
+                  <div className="flex items-center gap-1 px-3 py-2.5" style={{ background: c.bg, color: c.fg }}>
+                    <h2 className="min-w-0 flex-1 break-words text-xl font-extrabold leading-tight">{col.name}</h2>
+                    <span className="shrink-0 text-sm font-bold">{col.items.length === 0 ? '' : left === 0 ? 'All bought' : `${left} left`}</span>
+                    {isParent && anyBought && (
+                      <button className="rounded-lg p-1 hover:bg-white/60" title={`Remove bought from ${col.name}`} aria-label={`Remove bought from ${col.name}`} onClick={() => clearBought(col.name)}>
+                        <Check size={18} />
+                      </button>
+                    )}
+                    {isParent && col.items.length > 0 && (
+                      <button className="rounded-lg p-1 hover:bg-white/60" title={`Empty ${col.name}`} aria-label={`Empty the ${col.name} list`} onClick={() => clearAll(col.name)}>
+                        <Trash2 size={18} />
+                      </button>
+                    )}
+                    {isParent && col.id && col.items.length === 0 && (
+                      <button className="rounded-lg p-1 hover:bg-white/60" title={`Remove the ${col.name} category`} aria-label={`Remove the ${col.name} category`} onClick={() => removeCategory(col.id!, col.name)}>
+                        <X size={18} />
+                      </button>
+                    )}
+                  </div>
+                  {col.items.length === 0 ? (
+                    <p className="px-3 py-4 text-center text-muted">Nothing here yet</p>
+                  ) : (
+                    <ul className="flex flex-col">
+                      {col.items.map((i) => (
+                        <li key={i.id} className="flex w-full items-center gap-2 border-t border-line px-2 py-1 first:border-t-0">
+                          <button
+                            onClick={() => toggle(i)}
+                            aria-pressed={i.bought}
+                            aria-label={i.bought ? `${i.name}: bought. Tap to put back` : `Mark ${i.name} as bought`}
+                            className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left"
+                          >
+                            <span className="stamp stamp-bold h-8 w-8" data-on={i.bought}>
+                              {i.bought && <Check size={18} strokeWidth={4} className="text-white" />}
+                            </span>
+                            <span className={`min-w-0 break-words text-lg font-semibold ${i.bought ? 'text-muted line-through decoration-2' : 'text-ink'}`}>{i.name}</span>
+                          </button>
+                          {canRemove(i) && (
+                            <button aria-label={`Delete ${i.name}`} title="Delete" className="rounded-lg p-1 text-muted hover:bg-soft hover:text-danger" onClick={() => removeOne(i)}>
+                              <Trash2 size={17} />
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              );
+            })}
+          </Columns>
+        </>
+      )}
+    </AppLayout>
+  );
+}
+
+/**
+ * Category columns side by side: up to 5 fit the page (fewer on small screens); more scroll
+ * sideways, with a notice and arrow buttons so nobody misses them.
+ */
+function Columns({ count, children }: { count: number; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [scroll, setScroll] = useState({ left: false, right: false });
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => setScroll({ left: el.scrollLeft > 4, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 });
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      el.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [count]);
+
+  const by = (dir: number) => ref.current?.scrollBy({ left: dir * ref.current.clientWidth * 0.8, behavior: 'smooth' });
+  const hidden = scroll.left || scroll.right;
+
+  return (
+    <div>
+      {hidden && (
+        <div role="status" className="mb-2 flex items-center gap-2 rounded-2xl border-2 border-sun bg-sun-soft px-3 py-2 font-bold text-sun-ink">
+          <span className="flex-1">
+            {count} categories, not all fit on the screen. Scroll {scroll.right ? 'right' : 'left'} to see the rest.
+          </span>
+          <button className="rounded-lg bg-white p-1.5 disabled:opacity-30" aria-label="Scroll left" disabled={!scroll.left} onClick={() => by(-1)}>
+            <ChevronLeft size={20} />
+          </button>
+          <button className="rounded-lg bg-white p-1.5 disabled:opacity-30" aria-label="Scroll right" disabled={!scroll.right} onClick={() => by(1)}>
+            <ChevronRight size={20} />
+          </button>
+        </div>
+      )}
+      <div ref={ref} className="flex snap-x gap-4 overflow-x-auto pb-2">
+        {Array.isArray(children)
+          ? children.map((child, i) => (
+              <div key={i} className="w-[78%] shrink-0 snap-start sm:w-[calc((100%_-_1rem)/2)] lg:w-[calc((100%_-_3rem)/4)] xl:w-[calc((100%_-_4rem)/5)]">
+                {child}
+              </div>
+            ))
+          : children}
+      </div>
+    </div>
+  );
+}

@@ -77,7 +77,9 @@ function MemberLogin() {
       await supabase.auth.signOut({ scope: 'local' }); // make sure no admin session overrides the member session
       await api('/member-login', { body: form });
       await refresh();
-      navigate('/');
+      // Young kids (under 8) go straight to their own tasks page
+      const who = await api<{ member?: { role: string; age: number } }>('/me');
+      navigate(who.member?.role === 'kid' && who.member.age < 8 ? '/tasks/kids' : '/');
     } catch (err) {
       setError((err as Error).message);
     } finally {

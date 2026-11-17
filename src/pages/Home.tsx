@@ -1,11 +1,42 @@
-import { Camera, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { Bell, Camera, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AppLayout } from '../components/AppLayout';
 import { useConfirm } from '../components/ConfirmDialog';
 import { Avatar } from '../components/Face';
-import { api } from '../lib/api';
+import { api, today } from '../lib/api';
+import { niceDay, niceTime, nowHM, whenText, type CalEvent } from './Calendar';
 import { resizeImage } from '../lib/image';
 import { useRoles, useSession } from '../lib/session';
+
+/** Calendar reminders that are due: a small strip linking to the Calendar. Hidden when there are none. */
+function HomeReminders() {
+  const [items, setItems] = useState<CalEvent[]>([]);
+  const t = today();
+  useEffect(() => {
+    api<{ reminders: CalEvent[] }>(`/calendar?from=${t}&to=${t}&today=${t}&now=${nowHM()}`)
+      .then((r) => setItems(r.reminders))
+      .catch(() => {});
+  }, [t]);
+  if (items.length === 0) return null;
+  return (
+    <Link to="/calendar" className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border-2 border-sun bg-sun-soft px-4 py-2 hover:ring-2 hover:ring-sun">
+      <span className="inline-flex items-center gap-1.5 font-extrabold text-sun-ink">
+        <Bell size={20} /> Reminders
+      </span>
+      {items.slice(0, 3).map((r) => (
+        <span key={r.id} className="font-bold text-ink">
+          {r.title}{' '}
+          <span className="font-semibold text-muted">
+            ({r.end_day ? whenText(r) : niceDay(r.day, t)}
+            {r.time ? `, ${niceTime(r.time)}` : ''})
+          </span>
+        </span>
+      ))}
+      {items.length > 3 && <span className="font-bold text-muted">+{items.length - 3} more</span>}
+    </Link>
+  );
+}
 
 /** Shown until the admin uploads the family's own photo (public-domain photo, see public/LICENSE-photos.md). */
 const DEFAULT_PHOTO = '/default-family.jpg';
@@ -73,6 +104,7 @@ export default function Home() {
           )}
         </div>
         {error && <p className="mt-2 rounded-lg bg-danger/10 px-3 py-1 font-semibold text-danger">{error}</p>}
+        <HomeReminders />
 
         {/* Whole photo, never cropped: white margins fill the rest */}
         <div className="relative my-4 flex min-h-[45dvh] flex-1 items-center justify-center">

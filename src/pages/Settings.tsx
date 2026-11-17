@@ -4,7 +4,7 @@ import { AppLayout } from '../components/AppLayout';
 import { BirthdayInput, isValidBirthday } from '../components/BirthdayInput';
 import { Avatar, FacePicker } from '../components/Face';
 import { ErrorBox } from '../components/ui';
-import { api } from '../lib/api';
+import { api, today } from '../lib/api';
 import { squareImage } from '../lib/image';
 import { REWARD_ICONS, rewardIconUrl, rewardRule, type RewardKind } from '../lib/rewardIcons';
 import { CheckDropdown } from '../components/CheckDropdown';
@@ -315,7 +315,7 @@ function TasksSettings() {
   async function setKids(id: number, memberIds: string[] | null) {
     setError(null);
     try {
-      const { task } = await api<{ task: Template }>(`/settings/kid-tasks/${id}`, { method: 'PATCH', body: { memberIds: memberIds ?? 'all' } });
+      const { task } = await api<{ task: Template }>(`/settings/kid-tasks/${id}?day=${today()}`, { method: 'PATCH', body: { memberIds: memberIds ?? 'all' } });
       setTasks((l) => l?.map((t) => (t.id === id ? task : t)) ?? null);
     } catch (e) {
       setError((e as Error).message);
@@ -325,7 +325,7 @@ function TasksSettings() {
   async function remove(id: number) {
     setError(null);
     try {
-      await api(`/settings/kid-tasks/${id}`, { method: 'DELETE' });
+      await api(`/settings/kid-tasks/${id}?day=${today()}`, { method: 'DELETE' }); // stops counting from today
       setTasks((l) => l?.filter((t) => t.id !== id) ?? null);
       setConfirmId(null);
     } catch (e) {
