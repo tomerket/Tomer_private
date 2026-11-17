@@ -1,5 +1,6 @@
-import { BarChart3, ChevronDown, Gift, X } from 'lucide-react';
+import { BarChart3, ChevronDown, ChevronLeft, Gift, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AppLayout } from '../components/AppLayout';
 import { useConfirm } from '../components/ConfirmDialog';
 import { ErrorBox } from '../components/ui';
@@ -95,6 +96,9 @@ export default function Dashboard() {
   return (
     <AppLayout title="Dashboard" icon={<BarChart3 className="text-violet" />}>
       {confirmDialog}
+      <Link to="/tasks" className="mb-4 inline-flex items-center gap-1 text-xl font-bold text-violet hover:underline">
+        <ChevronLeft size={24} /> Family Tasks
+      </Link>
       {kids.length === 0 ? (
         <p className="py-10 text-center text-xl text-muted">Add kids in Settings to see their statistics.</p>
       ) : (

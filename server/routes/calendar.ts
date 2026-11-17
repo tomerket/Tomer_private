@@ -6,13 +6,16 @@ import { handle, HttpError, parseDay, requireText } from '../util.js';
 export const calendarRouter = Router();
 calendarRouter.use('/calendar', requireCaller);
 
-const EV_COLS = 'id, title, day, time, note, remind_on, created_by, created_at';
+const EV_COLS = 'id, title, day, end_day, time, note, category, remind_on, remind_time, created_by, created_at';
 const MAX_RANGE_DAYS = 62;
+const UPCOMING = 10;
 
-function parseTime(input: unknown): string | null {
+type Ev = { day: string; end_day: string | null; remind_on: string | null; remind_time: string | null; time: string | null };
+
+function parseTime(input: unknown, what = 'Time'): string | null {
   if (input === null || input === undefined || input === '') return null;
   const s = String(input);
-  if (!/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(s)) throw new HttpError(400, 'Time must be like 16:30');
+  if (!/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(s)) throw new HttpError(400, `${what} must be like 16:30`);
   return s;
 }
 
@@ -22,7 +25,21 @@ function parseNote(input: unknown): string | null {
   return s || null;
 }
 
-/** Optional reminder day: on or before the activity day. */
+function parseCategory(input: unknown): string | null {
+  const s = typeof input === 'string' ? input.trim() : '';
+  if (s.length > 30) throw new HttpError(400, 'Category is too long (max 30)');
+  return s || null;
+}
+
+/** Optional last day for activities that run over several days (same day = one-day activity). */
+function parseEnd(input: unknown, day: string): string | null {
+  if (input === null || input === undefined || input === '') return null;
+  const e = parseDay(input);
+  if (e < day) throw new HttpError(400, 'The end date can’t be before the start date');
+  return e === day ? null : e;
+}
+
+/** Optional reminder day: on or before the activity's first day. */
 function parseRemind(input: unknown, day: string): string | null {
   if (input === null || input === undefined || input === '') return null;
   const r = parseDay(input);
@@ -30,16 +47,27 @@ function parseRemind(input: unknown, day: string): string | null {
   return r;
 }
 
+/** Activities still going on (or coming) on `day`: last day is today or later. */
+const notOverOn = (day: string) => `end_day.gte.${day},and(end_day.is.null,day.gte.${day})`;
+
 /** Parents can change anything; kids only what they added. */
-async function eventFor(req: Request): Promise<{ me: Member; ev: { id: string; day: string; created_by: string | null } }> {
+async function eventFor(req: Request): Promise<{ me: Member; ev: Ev & { id: string; created_by: string | null } }> {
   const me = memberOf(req);
-  const { data } = await db().from('calendar_events').select('id, day, created_by').eq('id', String(req.params.id)).eq('family_id', me.family_id).maybeSingle();
+  const { data } = await db()
+    .from('calendar_events')
+    .select('id, day, end_day, time, remind_on, remind_time, created_by')
+    .eq('id', String(req.params.id))
+    .eq('family_id', me.family_id)
+    .maybeSingle();
   if (!data) throw new HttpError(404, 'Activity not found');
   if (me.role !== 'parent' && data.created_by !== me.id) throw new HttpError(403, 'You can only change what you added');
   return { me, ev: data };
 }
 
-/** Activities in a date range, plus family birthdays (month-day) and today's reminders. */
+/**
+ * Activities touching a date range, family birthdays (month-day), and the reminders due now.
+ * `today` and `now` (HH:MM) come from the browser, which knows the family's time zone.
+ */
 calendarRouter.get(
   '/calendar',
   handle(async (req, res) => {
@@ -47,20 +75,35 @@ calendarRouter.get(
     const from = parseDay(req.query.from);
     const to = parseDay(req.query.to);
     const today = parseDay(req.query.today ?? to);
+    const now = parseTime(req.query.now, 'now') ?? '23:59';
     if (from > to) throw new HttpError(400, '"From" must be before "To"');
     if ((Date.parse(to) - Date.parse(from)) / 86_400_000 + 1 > MAX_RANGE_DAYS) throw new HttpError(400, 'Range is too long');
     const [{ data: events, error }, { data: reminders, error: rErr }, { data: members, error: mErr }] = await Promise.all([
-      db().from('calendar_events').select(EV_COLS).eq('family_id', me.family_id).gte('day', from).lte('day', to).order('day').order('time', { nullsFirst: true }),
-      // Reminders showing today: the reminder day has come and the activity hasn't passed yet
-      db().from('calendar_events').select(EV_COLS).eq('family_id', me.family_id).lte('remind_on', today).gte('day', today).order('day').order('time', { nullsFirst: true }),
+      db().from('calendar_events').select(EV_COLS).eq('family_id', me.family_id).lte('day', to).or(notOverOn(from)).order('day').order('time', { nullsFirst: true }),
+      db().from('calendar_events').select(EV_COLS).eq('family_id', me.family_id).lte('remind_on', today).or(notOverOn(today)).order('day').order('time', { nullsFirst: true }),
       db().from('members').select('id, name, birthday').eq('family_id', me.family_id),
     ]);
     if (error || rErr || mErr) throw error ?? rErr ?? mErr;
     res.json({
       events: events ?? [],
-      reminders: reminders ?? [],
+      // A reminder with a time shows from that time on its day
+      reminders: ((reminders ?? []) as Ev[]).filter((r) => r.remind_on! < today || !r.remind_time || r.remind_time <= now),
       birthdays: (members ?? []).map((m) => ({ memberId: m.id, name: m.name, monthDay: String(m.birthday).slice(5, 10) })),
     });
+  }),
+);
+
+/** The next activities from today (still going on or coming), optionally in one category. */
+calendarRouter.get(
+  '/calendar/upcoming',
+  handle(async (req, res) => {
+    const me = memberOf(req);
+    const today = parseDay(req.query.today);
+    let q = db().from('calendar_events').select(EV_COLS).eq('family_id', me.family_id).or(notOverOn(today));
+    if (typeof req.query.category === 'string' && req.query.category) q = q.eq('category', req.query.category);
+    const { data, error } = await q.order('day').order('time', { nullsFirst: true }).limit(UPCOMING);
+    if (error) throw error;
+    res.json({ events: data ?? [] });
   }),
 );
 
@@ -68,15 +111,20 @@ calendarRouter.post(
   '/calendar',
   handle(async (req, res) => {
     const me = memberOf(req);
-    const day = parseDay(req.body?.day);
+    const b = req.body ?? {};
+    const day = parseDay(b.day);
+    const remind_on = parseRemind(b.remindOn, day);
     const row = {
       family_id: me.family_id,
       created_by: me.id,
-      title: requireText(req.body?.title, 'Activity', 80),
+      title: requireText(b.title, 'Activity', 80),
       day,
-      time: parseTime(req.body?.time),
-      note: parseNote(req.body?.note),
-      remind_on: parseRemind(req.body?.remindOn, day),
+      end_day: parseEnd(b.endDay, day),
+      time: parseTime(b.time),
+      note: parseNote(b.note),
+      category: parseCategory(b.category),
+      remind_on,
+      remind_time: remind_on ? parseTime(b.remindTime, 'Reminder time') : null,
     };
     const { data, error } = await db().from('calendar_events').insert(row).select(EV_COLS).single();
     if (error) throw error;
@@ -93,14 +141,17 @@ calendarRouter.patch(
     if ('title' in b) patch.title = requireText(b.title, 'Activity', 80);
     if ('time' in b) patch.time = parseTime(b.time);
     if ('note' in b) patch.note = parseNote(b.note);
+    if ('category' in b) patch.category = parseCategory(b.category);
     const day = 'day' in b ? parseDay(b.day) : ev.day;
     if ('day' in b) patch.day = day;
-    if ('remindOn' in b) patch.remind_on = parseRemind(b.remindOn, day);
-    else if ('day' in b) {
-      // Moving the activity earlier than its reminder: move the reminder with it
-      const { data: cur } = await db().from('calendar_events').select('remind_on').eq('id', ev.id).single();
-      if (cur?.remind_on && cur.remind_on > day) patch.remind_on = day;
-    }
+    if ('endDay' in b) patch.end_day = parseEnd(b.endDay, day);
+    else if ('day' in b && ev.end_day && ev.end_day < day) patch.end_day = null; // moved past its old end
+    if ('remindOn' in b) {
+      patch.remind_on = parseRemind(b.remindOn, day);
+      if (!patch.remind_on) patch.remind_time = null;
+    } else if ('day' in b && ev.remind_on && ev.remind_on > day) patch.remind_on = day; // keep the reminder before the activity
+    const remindOn = 'remind_on' in patch ? patch.remind_on : ev.remind_on;
+    if ('remindTime' in b) patch.remind_time = remindOn ? parseTime(b.remindTime, 'Reminder time') : null;
     if (Object.keys(patch).length === 0) throw new HttpError(400, 'Nothing to update');
     const { data, error } = await db().from('calendar_events').update(patch).eq('id', ev.id).eq('family_id', me.family_id).select(EV_COLS).single();
     if (error) throw error;

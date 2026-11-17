@@ -36,6 +36,8 @@ export default function FamilyTasks() {
         />
         {/* Kids can't open the parents tasks */}
         {isParent && <BigCard to="/tasks/parents" img={taskIconUrl('calendar')!} title="Parents" text="Today's to-do list for the grown-ups" />}
+        {/* Dashboard: parents only, like before */}
+        {isParent && <BigCard to="/tasks/dashboard" img="/reward-icons/trophy.png" title="Dashboard" text="How the kids are doing with their tasks and rewards" />}
       </div>
     </AppLayout>
   );

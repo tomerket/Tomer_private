@@ -5,7 +5,7 @@ import { AppLayout } from '../components/AppLayout';
 import { useConfirm } from '../components/ConfirmDialog';
 import { Avatar } from '../components/Face';
 import { api, today } from '../lib/api';
-import { niceDay, niceTime, type CalEvent } from './Calendar';
+import { niceDay, niceTime, nowHM, whenText, type CalEvent } from './Calendar';
 import { resizeImage } from '../lib/image';
 import { useRoles, useSession } from '../lib/session';
 
@@ -14,7 +14,7 @@ function HomeReminders() {
   const [items, setItems] = useState<CalEvent[]>([]);
   const t = today();
   useEffect(() => {
-    api<{ reminders: CalEvent[] }>(`/calendar?from=${t}&to=${t}&today=${t}`)
+    api<{ reminders: CalEvent[] }>(`/calendar?from=${t}&to=${t}&today=${t}&now=${nowHM()}`)
       .then((r) => setItems(r.reminders))
       .catch(() => {});
   }, [t]);
@@ -28,7 +28,7 @@ function HomeReminders() {
         <span key={r.id} className="font-bold text-ink">
           {r.title}{' '}
           <span className="font-semibold text-muted">
-            ({niceDay(r.day, t)}
+            ({r.end_day ? whenText(r) : niceDay(r.day, t)}
             {r.time ? `, ${niceTime(r.time)}` : ''})
           </span>
         </span>

@@ -63,7 +63,8 @@ function App() {
       <Route path="/tasks/parents" element={<Role need="parent"><ParentsTasks /></Role>} />
       <Route path="/calendar" element={<Private><Calendar /></Private>} />
       <Route path="/shopping" element={<Private><Shopping /></Private>} />
-      <Route path="/dashboard"element={<Role need="parent"><Dashboard /></Role>} />
+      <Route path="/tasks/dashboard" element={<Role need="parent"><Dashboard /></Role>} />
+      <Route path="/dashboard" element={<Navigate to="/tasks/dashboard" replace />} />
       <Route path="/settings" element={<Role need="admin"><Settings /></Role>} />
       <Route path="/design" element={<DesignTile />} />
       <Route path="*" element={<Navigate to="/" replace />} />

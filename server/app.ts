@@ -6,6 +6,7 @@ import { settingsRouter } from './routes/settings.js';
 import { tasksRouter } from './routes/tasks.js';
 import { calendarRouter } from './routes/calendar.js';
 import { shoppingRouter } from './routes/shopping.js';
+import { categoriesRouter } from './routes/categories.js';
 import { HttpError } from './util.js';
 
 const app = express();
@@ -21,6 +22,7 @@ app.use('/api', familyRouter);
 app.use('/api', settingsRouter);
 app.use('/api', calendarRouter);
 app.use('/api', shoppingRouter);
+app.use('/api', categoriesRouter);
 app.use('/api', tasksRouter);
 
 app.use('/api', (_req, res) => {
