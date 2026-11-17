@@ -11,10 +11,10 @@ import { TaskPicture } from './KidsTasks';
 import { CheckDropdown } from '../components/CheckDropdown';
 import { rewardIconUrl, rewardRule, type RewardKind } from '../lib/rewardIcons';
 
-type KidStats = {
+export type KidStats = {
   id: string;
   name: string;
-  days: { day: string; done: number; total: number; reward: boolean }[];
+  days: { day: string; done: number; total: number; reward: boolean; earned: string[] }[]; // earned = reward ids earned that day
   periods: Record<Period, { done: number; total: number }>;
   tasks: { id: number; title: string; icon: string; period: Period; archived: boolean; done: number; total: number }[];
   grid: Record<string, Record<number, 'yes' | 'no'>>;
@@ -31,9 +31,9 @@ type KidStats = {
 };
 
 // Categorical series colors (validated palette), assigned by the kid's fixed position in the family
-const SERIES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'];
+export const SERIES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'];
 
-const addDays = (iso: string, n: number) => {
+export const addDays = (iso: string, n: number) => {
   const d = new Date(`${iso}T00:00:00`);
   d.setDate(d.getDate() + n);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -42,7 +42,7 @@ const md = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(8, 10)}`;
 const weekday = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', { weekday: 'short' });
 const pct = (done: number, total: number) => (total ? Math.round((done / total) * 100) : 0);
 
-const PRESETS = [
+export const PRESETS = [
   { key: '1', label: 'Today', days: 1 },
   { key: '7', label: 'Last 7 days', days: 7 },
   { key: '14', label: 'Last 14 days', days: 14 },
@@ -362,7 +362,19 @@ function PeriodChart({ stats, colorOf, rangeText }: { stats: KidStats[]; colorOf
 }
 
 /** Rewards per kid: on how many days each reward was earned in the chosen dates (once a day at most). */
-function RewardsTotals({ stats, colorOf, rangeText }: { stats: KidStats[]; colorOf: (id: string) => string; rangeText: string }) {
+export function RewardsTotals({
+  stats,
+  colorOf,
+  rangeText,
+  title = 'Rewards earned per kid',
+  datesOnly = false,
+}: {
+  stats: KidStats[];
+  colorOf: (id: string) => string;
+  rangeText: string;
+  title?: string;
+  datesOnly?: boolean; // caption shows only the dates
+}) {
   const all = new Map<string, KidStats['rewards'][number]>();
   stats.forEach((k) => k.rewards.forEach((r) => all.has(r.id) || all.set(r.id, r)));
   const rows = [...all.values()];
@@ -370,32 +382,38 @@ function RewardsTotals({ stats, colorOf, rangeText }: { stats: KidStats[]; color
   // Phones: narrow columns so more kids fit side by side; kid names may wrap under their dot
   // Widths in rem so the table grows with the text on big monitors
   const col = isPhone ? { reward: 6, kid: 3.375, total: 2.75 } : { reward: 13.75, kid: 7, total: 6 };
+  // One kid: just the reward and how many times; no kid name and no total column
+  const single = stats.length === 1;
+  const kidCol = single ? (isPhone ? 4.5 : 8) : col.kid;
+  const totalCol = single ? 0 : col.total;
   return (
     <section className="overflow-hidden rounded-2xl border-2 border-sun/40">
       <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 bg-sun-soft px-3 py-2.5 sm:px-4 sm:py-3">
         <h3 className="flex items-center gap-2 text-lg font-extrabold sm:text-xl">
-          <Gift className="text-sun-ink" /> Rewards earned per kid
+          <Gift className="text-sun-ink" /> {title}
         </h3>
         {/* Phones: just the dates of the filter */}
-        <span className="text-sm font-semibold text-muted">{isPhone ? rangeText : `Days earned, ${rangeText}. Each reward can be earned once a day.`}</span>
+        <span className="text-sm font-semibold text-muted">{isPhone || datesOnly ? rangeText : `Days earned, ${rangeText}. Each reward can be earned once a day.`}</span>
       </div>
       {rows.length === 0 ? (
         <p className="px-4 py-4 text-muted">No rewards yet. Add them in Settings.</p>
       ) : (
         <div className="overflow-x-auto">
           {/* If there are still too many kids, the table scrolls sideways inside its box */}
-          <table className="w-full table-fixed text-left" style={{ minWidth: `${col.reward + stats.length * col.kid + col.total}rem` }}>
+          <table className="w-full table-fixed text-left" style={{ minWidth: `${col.reward + stats.length * kidCol + totalCol}rem` }}>
             <colgroup>
               <col />
               {stats.map((k) => (
-                <col key={k.id} style={{ width: `${col.kid}rem` }} />
+                <col key={k.id} style={{ width: `${kidCol}rem` }} />
               ))}
-              <col style={{ width: `${col.total}rem` }} />
+              {!single && <col style={{ width: `${col.total}rem` }} />}
             </colgroup>
             <thead>
               <tr className="text-xs sm:text-sm">
                 <th className="px-2 py-2 font-bold text-muted sm:px-4">Reward</th>
-                {stats.map((k) => (
+                {single ? (
+                  <th className="px-2 py-2 text-right font-bold text-muted sm:px-4">Times earned</th>
+                ) : stats.map((k) => (
                   <th key={k.id} className="px-1 py-2 text-right font-extrabold sm:px-3">
                     <span className="inline-flex flex-col items-end gap-0.5 leading-tight sm:flex-row sm:items-center sm:gap-1.5">
                       <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorOf(k.id) }} />
@@ -403,7 +421,7 @@ function RewardsTotals({ stats, colorOf, rangeText }: { stats: KidStats[]; color
                     </span>
                   </th>
                 ))}
-                <th className="px-1 py-2 text-right font-extrabold sm:px-4">Total</th>
+                {!single && <th className="px-1 py-2 text-right font-extrabold sm:px-4">Total</th>}
               </tr>
             </thead>
             <tbody>
@@ -426,7 +444,7 @@ function RewardsTotals({ stats, colorOf, rangeText }: { stats: KidStats[]; color
                         {c === undefined ? <span className="text-muted">–</span> : c}
                       </td>
                     ))}
-                    <td className="px-1 text-right text-base font-extrabold tabular-nums text-sun-ink sm:px-4 sm:text-xl">{total}</td>
+                    {!single && <td className="px-1 text-right text-base font-extrabold tabular-nums text-sun-ink sm:px-4 sm:text-xl">{total}</td>}
                   </tr>
                 );
               })}
