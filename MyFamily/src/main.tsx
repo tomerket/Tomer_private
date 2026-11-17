@@ -15,6 +15,7 @@ import Settings from './pages/Settings';
 import Home from './pages/Home';
 import KidsTasks from './pages/KidsTasks';
 import Login from './pages/Login';
+import MyRewards from './pages/MyRewards';
 import Onboarding from './pages/Onboarding';
 import ParentsTasks from './pages/ParentsTasks';
 import Register from './pages/Register';
@@ -61,6 +62,7 @@ function App() {
       <Route path="/" element={<Private><Home /></Private>} />
       <Route path="/tasks" element={<Private><FamilyTasks /></Private>} />
       <Route path="/tasks/kids" element={<Private><KidsTasks /></Private>} />
+      <Route path="/tasks/rewards" element={<Private><MyRewards /></Private>} />
       <Route path="/tasks/parents" element={<Role need="parent"><ParentsTasks /></Role>} />
       <Route path="/calendar" element={<Private><Calendar /></Private>} />
       <Route path="/shopping" element={<Private><Shopping /></Private>} />

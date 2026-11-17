@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, ClipboardCheck, ClipboardList, HelpCircle, Home, LogIn, Settings, ShoppingCart, Smartphone, Smile, type LucideIcon } from 'lucide-react';
+import { BarChart3, CalendarDays, ClipboardCheck, ClipboardList, Gift, HelpCircle, Home, LogIn, Settings, ShoppingCart, Smartphone, Smile, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { AppLayout } from '../components/AppLayout';
 import { useRoles } from '../lib/session';
@@ -35,7 +35,7 @@ const SECTIONS: Section[] = [
     body: (
       <>
         <p>The family photo, everyone's name and age, and a yellow <b>Reminders</b> bar when a calendar reminder is due. Tap the bar to open the Calendar.</p>
-        <p>The admin can change or remove the family photo with the camera button.</p>
+        <p>Any parent can change or remove the family photo with the camera button.</p>
       </>
     ),
   },
@@ -70,10 +70,27 @@ const SECTIONS: Section[] = [
         <ul>
           <li>
             <b>Open today</b>: started and not done, plus what was finished today. <b>Due today</b>: ends today or is late. <b>All open</b>:
-            everything not done. <b>Done</b>: finished tasks.
+            everything not done (Open and In progress). <b>Done</b>: finished tasks.
           </li>
+          <li>Every new task starts as <b>Open</b>. Use the status next to the title to switch between Open, In progress and Done.</li>
           <li>Tick the circle to close a task; untick it in Done to open it again.</li>
+          <li>Done keeps the last 15 finished tasks. When another task is done, the oldest one is deleted.</li>
           <li>Use the pencil to change a task, or the camera to add a photo.</li>
+        </ul>
+      </>
+    ),
+  },
+  {
+    id: 'rewards',
+    title: 'Rewards',
+    icon: Gift,
+    body: (
+      <>
+        <p>In Family Tasks, open <b>Rewards</b> (kids see <b>My Rewards</b>). It shows how many times each reward was earned in the dates you choose.</p>
+        <ul>
+          <li>A kid sees only their own rewards. Parents choose one kid, several, or all kids.</li>
+          <li>With more than one kid, the table has a column per kid and a total.</li>
+          <li><b>History</b> lists each day and the rewards earned that day (with the kid's name when several kids are shown). It keeps the last 30 days.</li>
         </ul>
       </>
     ),

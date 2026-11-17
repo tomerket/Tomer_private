@@ -140,7 +140,7 @@ async function checkAssignee(familyId: string, assignedTo: unknown): Promise<str
 }
 
 // "day" is the start date
-const PT_COLS = 'id, subject, text, day, due_date, done, done_at, assigned_to, created_by, created_at, photo_path, icon';
+const PT_COLS = 'id, subject, text, day, due_date, done, done_at, in_progress, assigned_to, created_by, created_at, photo_path, icon';
 
 /** Optional gallery picture key (null = none). */
 function parseIcon(input: unknown): string | null {
@@ -188,7 +188,7 @@ tasksRouter.get(
     const me = requireParent(req);
     let q = db().from('parent_tasks').select(PT_COLS).eq('family_id', me.family_id);
     if (req.query.filter === 'done') {
-      const { data, error } = await q.eq('done', true).order('done_at', { ascending: false, nullsFirst: false }).limit(200);
+      const { data, error } = await q.eq('done', true).order('done_at', { ascending: false, nullsFirst: false }).limit(MAX_DONE_TASKS);
       if (error) throw error;
       return void res.json({ tasks: await withPhotoUrls(data ?? []) });
     }
@@ -224,6 +224,23 @@ tasksRouter.post(
   }),
 );
 
+/** The Done list keeps the newest 15 finished tasks; older ones (and their photos) are deleted. */
+export const MAX_DONE_TASKS = 15;
+async function pruneDone(familyId: string) {
+  const { data: old } = await db()
+    .from('parent_tasks')
+    .select('id, photo_path')
+    .eq('family_id', familyId)
+    .eq('done', true)
+    .order('done_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
+    .range(MAX_DONE_TASKS, MAX_DONE_TASKS + 500);
+  if (!old?.length) return;
+  await db().from('parent_tasks').delete().eq('family_id', familyId).in('id', old.map((o) => o.id));
+  const paths = old.map((o) => o.photo_path).filter(Boolean) as string[];
+  if (paths.length) await db().storage.from(PHOTO_BUCKET).remove(paths);
+}
+
 tasksRouter.patch(
   '/parent-tasks/:id',
   handle(async (req, res) => {
@@ -231,9 +248,17 @@ tasksRouter.patch(
     const patch: Record<string, unknown> = {};
     if ('subject' in (req.body ?? {})) patch.subject = requireText(req.body.subject, 'Subject', 80);
     if ('description' in (req.body ?? {})) patch.text = parseDescription(req.body.description);
-    if ('done' in (req.body ?? {})) {
+    // Status: open (default) | in_progress | done. The old "done" true/false still works.
+    if ('status' in (req.body ?? {})) {
+      const st = req.body.status;
+      if (st !== 'open' && st !== 'in_progress' && st !== 'done') throw new HttpError(400, 'Status must be open, in_progress or done');
+      patch.done = st === 'done';
+      patch.in_progress = st === 'in_progress';
+      patch.done_at = st === 'done' ? new Date().toISOString() : null;
+    } else if ('done' in (req.body ?? {})) {
       patch.done = Boolean(req.body.done);
       patch.done_at = patch.done ? new Date().toISOString() : null;
+      patch.in_progress = false; // reopened or closed: back to plain Open / Done
     }
     if ('assignedTo' in (req.body ?? {})) patch.assigned_to = await checkAssignee(me.family_id, req.body.assignedTo);
     if ('icon' in (req.body ?? {})) patch.icon = parseIcon(req.body.icon);
@@ -254,6 +279,7 @@ tasksRouter.patch(
       .maybeSingle();
     if (error) throw error;
     if (!data) throw new HttpError(404, 'Task not found');
+    if (patch.done === true) await pruneDone(me.family_id);
     res.json({ task: (await withPhotoUrls([data]))[0] });
   }),
 );
@@ -334,13 +360,14 @@ type Tpl = {
 tasksRouter.get(
   '/stats',
   handle(async (req, res) => {
-    const me = requireParent(req);
+    // Parents: any kid in the family. A kid: only their own rewards and tasks (My rewards page).
+    const me = memberOf(req);
     const from = parseDay(req.query.from);
     const to = parseDay(req.query.to);
     if (from > to) throw new HttpError(400, '"From" must be before "To"');
     if ((Date.parse(to) - Date.parse(from)) / DAY_MS + 1 > MAX_RANGE_DAYS) throw new HttpError(400, `Pick at most ${MAX_RANGE_DAYS} days`);
 
-    const wanted = String(req.query.memberIds ?? '').split(',').filter(Boolean);
+    const wanted = me.role === 'kid' ? [me.id] : String(req.query.memberIds ?? '').split(',').filter(Boolean);
     let kq = db().from('members').select('id, name, created_at').eq('family_id', me.family_id).eq('role', 'kid').order('created_at');
     if (wanted.length && !wanted.includes('all')) kq = kq.in('id', wanted);
     const { data: kids, error: kErr } = await kq;
@@ -383,7 +410,7 @@ tasksRouter.get(
       const daily = (rewards as RewardRow[]).filter((r) => appliesTo(r, kid.id));
       const dailyEarned = new Map(daily.map((r) => [r.id, 0]));
 
-      const days: { day: string; done: number; total: number; reward: boolean }[] = [];
+      const days: { day: string; done: number; total: number; reward: boolean; earned: string[] }[] = [];
       const perTask = new Map<number, { done: number; total: number }>();
       const periods = Object.fromEntries(PERIODS.map((p) => [p, { done: 0, total: 0 }])) as Record<(typeof PERIODS)[number], { done: number; total: number }>;
       const grid: Record<string, Record<number, 'yes' | 'no'>> = {};
@@ -409,14 +436,14 @@ tasksRouter.get(
         }
         // A reward needs at least its number of tasks done that day, and every must-do task done
         const mustDoDone = mine.every((tpl) => !tpl.mandatory || !activeOn(tpl, day) || done.has(`${kid.id}|${tpl.id}|${day}`));
-        let reward = false;
+        const earnedToday: string[] = [];
         for (const r of daily) {
           if (dTotal > 0 && mustDoDone && dDone >= r.min_score!) {
             dailyEarned.set(r.id, dailyEarned.get(r.id)! + 1);
-            reward = true;
+            earnedToday.push(r.id);
           }
         }
-        days.push({ day, done: dDone, total: dTotal, reward });
+        days.push({ day, done: dDone, total: dTotal, reward: earnedToday.length > 0, earned: earnedToday });
       }
 
       const totalDone = days.reduce((a, d) => a + d.done, 0);

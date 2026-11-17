@@ -9,15 +9,15 @@ function BigCard({ to, img, title, text }: { to: string; img: string; title: str
   return (
     <Link
       to={to}
-      className="card-gradient lift group flex min-h-[120px] flex-1 items-center gap-4 overflow-hidden rounded-[28px] p-4 text-white transition hover:-translate-y-0.5 sm:gap-8 sm:px-8 sm:py-5 [@media(min-height:900px)]:sm:p-10"
+      className="card-gradient lift group flex min-h-[110px] flex-1 items-center gap-4 overflow-hidden rounded-[28px] p-4 text-white transition hover:-translate-y-0.5 sm:gap-8 sm:px-8 sm:py-3 [@media(min-height:900px)]:sm:px-8 [@media(min-height:900px)]:sm:py-5"
     >
       <img
         src={img}
         alt=""
-        className="h-20 w-20 shrink-0 rounded-[20px] bg-white object-contain p-1.5 sm:h-28 sm:w-28 [@media(min-height:900px)]:sm:h-40 [@media(min-height:900px)]:sm:w-40"
+        className="h-20 w-20 shrink-0 rounded-[20px] bg-white object-contain p-1.5 sm:h-24 sm:w-24 [@media(min-height:900px)]:sm:h-32 [@media(min-height:900px)]:sm:w-32"
       />
       <div className="min-w-0 flex-1">
-        <div className="text-4xl font-extrabold leading-none sm:text-6xl [@media(min-height:900px)]:sm:text-7xl">{title}</div>
+        <div className="text-4xl font-extrabold leading-none sm:text-5xl [@media(min-height:900px)]:sm:text-6xl">{title}</div>
         <div className="mt-1.5 text-lg font-medium text-white/90 sm:text-2xl">{text}</div>
       </div>
       <span className="hidden shrink-0 rounded-full bg-white px-6 py-3 text-xl font-bold text-violet sm:inline sm:px-8 sm:text-2xl">Open</span>
@@ -38,6 +38,8 @@ export default function FamilyTasks() {
           title="Kids"
           text={isParent ? (kids ? `Daily tasks for ${kids} ${kids === 1 ? 'kid' : 'kids'}` : 'Daily tasks for the kids') : 'My daily tasks'}
         />
+        {/* Everyone: a kid sees their own rewards, parents pick a kid */}
+        <BigCard to="/tasks/rewards" img="/reward-icons/gift.png" title={isParent ? 'Rewards' : 'My Rewards'} text={isParent ? "Each kid's rewards and history" : 'My rewards and history'} />
         {/* Kids can't open the parents tasks */}
         {isParent && <BigCard to="/tasks/parents" img={taskIconUrl('calendar')!} title="Parents" text="Today's to-do list for the grown-ups" />}
         {/* Dashboard: parents only, like before */}

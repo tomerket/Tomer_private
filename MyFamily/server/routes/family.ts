@@ -55,13 +55,13 @@ familyRouter.post(
   }),
 );
 
-/** Remove the family photo (Home then shows the sample photo). Admin only. */
+/** Remove the family photo (Home then shows the sample photo). Parents only (admin or any parent). */
 familyRouter.delete(
   '/family/photo',
   requireCaller,
   handle(async (req, res) => {
     const me = memberOf(req);
-    if (req.caller!.kind !== 'admin' || !me.is_admin) throw new HttpError(403, 'Only the family admin can change the photo');
+    if (me.role !== 'parent') throw new HttpError(403, 'Only a parent can change the photo');
     const { data: family } = await db().from('families').select('photo_path').eq('id', me.family_id).single();
     const { error } = await db().from('families').update({ photo_path: null }).eq('id', me.family_id);
     if (error) throw error;
@@ -72,14 +72,14 @@ familyRouter.delete(
 
 const PHOTO_TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 
-/** Upload / replace the family photo. Body is the raw image bytes. Admin only. */
+/** Upload / replace the family photo. Body is the raw image bytes. Parents only (admin or any parent). */
 familyRouter.post(
   '/family/photo',
   requireCaller,
   express.raw({ type: Object.keys(PHOTO_TYPES), limit: '4mb' }),
   handle(async (req, res) => {
     const me = memberOf(req);
-    if (req.caller!.kind !== 'admin' || !me.is_admin) throw new HttpError(403, 'Only the family admin can change the photo');
+    if (me.role !== 'parent') throw new HttpError(403, 'Only a parent can change the photo');
     const type = (req.headers['content-type'] ?? '').split(';')[0];
     const ext = PHOTO_TYPES[type];
     if (!ext || !Buffer.isBuffer(req.body) || req.body.length === 0) {
