@@ -20,6 +20,7 @@ type ParentTask = {
   due_date: string | null; // end date (null = no end date)
   done: boolean;
   done_at: string | null;
+  in_progress: boolean;
   assigned_to: string | null;
   created_by: string | null;
   created_at: string;
@@ -28,7 +29,8 @@ type ParentTask = {
   photoUrl: string | null;
 };
 type Filter = 'today' | 'due' | 'open' | 'done';
-type Patch = Partial<{ subject: string; description: string; done: boolean; day: string; dueDate: string | null; icon: string | null }>;
+type Status = 'open' | 'in_progress' | 'done';
+type Patch = Partial<{ subject: string; description: string; done: boolean; status: Status; day: string; dueDate: string | null; icon: string | null }>;
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'today', label: 'Open today' },
@@ -364,7 +366,8 @@ export default function ParentsTasks() {
                 assigneeName={nameOf(t.assigned_to)}
                 assigneeColor={colorOfParent(t.assigned_to)}
                 creatorName={nameOf(t.created_by)}
-                onToggle={() => patch(t.id, { done: !t.done })}
+                onToggle={() => patch(t.id, { status: t.done ? 'open' : 'done' })}
+                onStatus={(st) => patch(t.id, { status: st })}
                 onSave={(p) => patch(t.id, p)}
                 onPhoto={(f) => setTaskPhoto(t.id, f)}
                 onDelete={() => remove(t.id)}
@@ -377,14 +380,42 @@ export default function ParentsTasks() {
   );
 }
 
-/** Status of a task relative to today. */
-function status(task: ParentTask, todayIso: string): { text: string; cls: string } {
-  if (task.done) return { text: task.done_at ? `Done ${mdy(localDay(task.done_at))}` : 'Done', cls: 'bg-success/10 text-success' };
+const STATUSES: { key: Status; label: string; cls: string }[] = [
+  { key: 'open', label: 'Open', cls: 'bg-soft text-ink border-line' },
+  { key: 'in_progress', label: 'In progress', cls: 'bg-violet-soft text-violet border-violet/30' },
+  { key: 'done', label: 'Done', cls: 'bg-success/10 text-success border-success/30' },
+];
+const statusOf = (t: ParentTask): Status => (t.done ? 'done' : t.in_progress ? 'in_progress' : 'open');
+
+/** Extra note about the dates (only for tasks that are not done). */
+function dateNote(task: ParentTask, todayIso: string): { text: string; cls: string } | null {
+  if (task.done) return task.done_at ? { text: `Done ${mdy(localDay(task.done_at))}`, cls: 'text-success' } : null;
   if (task.day > todayIso) return { text: 'Not started yet', cls: 'bg-soft text-muted' };
-  if (!task.due_date) return { text: 'In progress', cls: 'bg-violet-soft text-violet' };
+  if (!task.due_date) return null;
   if (task.due_date < todayIso) return { text: 'Overdue', cls: 'bg-danger/10 text-danger' };
   if (task.due_date === todayIso) return { text: 'Ends today', cls: 'bg-sun-soft text-sun-ink' };
-  return { text: 'In progress', cls: 'bg-violet-soft text-violet' };
+  return null;
+}
+
+/** Status as a small coloured dropdown: Open / In progress / Done. */
+function StatusSelect({ value, disabled, onChange }: { value: Status; disabled: boolean; onChange: (s: Status) => void }) {
+  const cur = STATUSES.find((x) => x.key === value)!;
+  return (
+    <select
+      aria-label="Status"
+      title="Change status"
+      disabled={disabled}
+      value={value}
+      onChange={(e) => onChange(e.target.value as Status)}
+      className={`cursor-pointer rounded-full border-2 py-0.5 pl-3 pr-1 text-base font-bold outline-none disabled:cursor-default ${cur.cls}`}
+    >
+      {STATUSES.map((x) => (
+        <option key={x.key} value={x.key} className="bg-white text-ink">
+          {x.label}
+        </option>
+      ))}
+    </select>
+  );
 }
 
 function TaskItem({
@@ -395,6 +426,7 @@ function TaskItem({
   assigneeColor,
   creatorName,
   onToggle,
+  onStatus,
   onSave,
   onPhoto,
   onDelete,
@@ -406,6 +438,7 @@ function TaskItem({
   assigneeColor: { bg: string; fg: string };
   creatorName?: string;
   onToggle: () => void;
+  onStatus: (s: Status) => void;
   onSave: (p: Patch) => void;
   onPhoto: (f: File | null) => void;
   onDelete: () => void;
@@ -415,7 +448,7 @@ function TaskItem({
   const [description, setDescription] = useState(task.text ?? '');
   const [start, setStart] = useState(task.day);
   const [end, setEnd] = useState(task.due_date ?? '');
-  const st = status(task, todayIso);
+  const note = dateNote(task, todayIso);
 
   function cancel() {
     setSubject(task.subject);
@@ -499,7 +532,8 @@ function TaskItem({
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <p className={`min-w-0 break-words text-xl font-extrabold sm:text-2xl ${task.done ? 'text-muted line-through' : ''}`}>{task.subject}</p>
-                <span className={`rounded-full px-2.5 py-0.5 text-base font-bold ${st.cls}`}>{st.text}</span>
+                <StatusSelect value={statusOf(task)} disabled={!canEdit} onChange={onStatus} />
+                {note && <span className={`rounded-full px-2.5 py-0.5 text-base font-bold ${note.cls}`}>{note.text}</span>}
               </div>
               {task.text && <p className={`mt-1 whitespace-pre-wrap break-words text-lg ${task.done ? 'text-muted' : 'text-ink'}`}>{task.text}</p>}
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-base text-muted">

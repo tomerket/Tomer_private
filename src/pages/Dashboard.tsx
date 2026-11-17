@@ -11,10 +11,10 @@ import { TaskPicture } from './KidsTasks';
 import { CheckDropdown } from '../components/CheckDropdown';
 import { rewardIconUrl, rewardRule, type RewardKind } from '../lib/rewardIcons';
 
-type KidStats = {
+export type KidStats = {
   id: string;
   name: string;
-  days: { day: string; done: number; total: number; reward: boolean }[];
+  days: { day: string; done: number; total: number; reward: boolean; earned: string[] }[]; // earned = reward ids earned that day
   periods: Record<Period, { done: number; total: number }>;
   tasks: { id: number; title: string; icon: string; period: Period; archived: boolean; done: number; total: number }[];
   grid: Record<string, Record<number, 'yes' | 'no'>>;
@@ -31,9 +31,9 @@ type KidStats = {
 };
 
 // Categorical series colors (validated palette), assigned by the kid's fixed position in the family
-const SERIES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'];
+export const SERIES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'];
 
-const addDays = (iso: string, n: number) => {
+export const addDays = (iso: string, n: number) => {
   const d = new Date(`${iso}T00:00:00`);
   d.setDate(d.getDate() + n);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -42,7 +42,7 @@ const md = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(8, 10)}`;
 const weekday = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', { weekday: 'short' });
 const pct = (done: number, total: number) => (total ? Math.round((done / total) * 100) : 0);
 
-const PRESETS = [
+export const PRESETS = [
   { key: '1', label: 'Today', days: 1 },
   { key: '7', label: 'Last 7 days', days: 7 },
   { key: '14', label: 'Last 14 days', days: 14 },
@@ -362,7 +362,7 @@ function PeriodChart({ stats, colorOf, rangeText }: { stats: KidStats[]; colorOf
 }
 
 /** Rewards per kid: on how many days each reward was earned in the chosen dates (once a day at most). */
-function RewardsTotals({ stats, colorOf, rangeText }: { stats: KidStats[]; colorOf: (id: string) => string; rangeText: string }) {
+export function RewardsTotals({ stats, colorOf, rangeText }: { stats: KidStats[]; colorOf: (id: string) => string; rangeText: string }) {
   const all = new Map<string, KidStats['rewards'][number]>();
   stats.forEach((k) => k.rewards.forEach((r) => all.has(r.id) || all.set(r.id, r)));
   const rows = [...all.values()];
