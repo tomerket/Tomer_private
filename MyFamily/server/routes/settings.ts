@@ -3,6 +3,7 @@ import express, { Router, type Request } from 'express';
 import { memberOf, requireCaller, type Member } from '../auth.js';
 import { db, PHOTO_BUCKET } from '../supabase.js';
 import { handle, HttpError, parseBirthday, requireText } from '../util.js';
+import { REWARD_COLS } from '../rewards.js';
 import { TEMPLATE_COLS } from './tasks.js';
 
 /** Admin settings: manage family members and the kids task list. Admin (email login) only. */
@@ -183,6 +184,22 @@ settingsRouter.post(
   }),
 );
 
+/** Set the must-do tasks: the listed ones become mandatory, all others not. */
+settingsRouter.put(
+  '/settings/kid-tasks/mandatory',
+  handle(async (req, res) => {
+    const me = requireAdmin(req);
+    const ids: number[] = Array.isArray(req.body?.taskIds) ? req.body.taskIds.map(Number).filter(Number.isInteger) : [];
+    const { error: offErr } = await db().from('kid_task_templates').update({ mandatory: false }).eq('family_id', me.family_id).is('archived_at', null);
+    if (offErr) throw offErr;
+    if (ids.length) {
+      const { error } = await db().from('kid_task_templates').update({ mandatory: true }).eq('family_id', me.family_id).in('id', ids);
+      if (error) throw error;
+    }
+    res.json({ ok: true });
+  }),
+);
+
 /** Change which kids a task is for. */
 settingsRouter.patch(
   '/settings/kid-tasks/:id',
@@ -205,8 +222,6 @@ settingsRouter.patch(
 
 // ----- Rewards -----
 
-const REWARD_COLS = 'id, title, min_score, member_ids';
-
 settingsRouter.get(
   '/settings/rewards',
   handle(async (req, res) => {
@@ -227,12 +242,33 @@ settingsRouter.post(
   handle(async (req, res) => {
     const me = requireAdmin(req);
     const title = requireText(req.body?.title, 'Reward', 80);
-    const min_score = Number(req.body?.minScore);
-    if (!Number.isInteger(min_score) || min_score < 1 || min_score > 100) throw new HttpError(400, 'Score must be a whole number from 1');
+    const icon = String(req.body?.icon ?? 'gift');
+    if (!/^[a-z0-9-]{1,30}$/.test(icon)) throw new HttpError(400, 'Choose a picture');
     const member_ids = await parseKidIds(me.family_id, req.body?.memberIds);
+    const kind = req.body?.kind === 'streak' ? 'streak' : 'daily';
+    const row: Record<string, unknown> = { family_id: me.family_id, title, icon, kind, member_ids };
+    if (kind === 'daily') {
+      const min_score = Number(req.body?.minScore);
+      if (!Number.isInteger(min_score) || min_score < 1 || min_score > 100) throw new HttpError(400, 'Tasks per day must be a whole number from 1');
+      row.min_score = min_score;
+    } else {
+      // One task done several days in a row
+      const streak_days = Number(req.body?.streakDays);
+      if (!Number.isInteger(streak_days) || streak_days < 2 || streak_days > 60) throw new HttpError(400, 'Days in a row must be between 2 and 60');
+      const { data: task } = await db()
+        .from('kid_task_templates')
+        .select('id')
+        .eq('id', Number(req.body?.taskId))
+        .eq('family_id', me.family_id)
+        .is('archived_at', null)
+        .maybeSingle();
+      if (!task) throw new HttpError(400, 'Choose the task');
+      row.task_id = task.id;
+      row.streak_days = streak_days;
+    }
     const { data, error } = await db()
       .from('kid_rewards')
-      .insert({ family_id: me.family_id, title, min_score, member_ids })
+      .insert(row)
       .select(REWARD_COLS)
       .single();
     if (error) throw error;

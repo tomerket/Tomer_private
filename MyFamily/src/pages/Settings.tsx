@@ -6,6 +6,8 @@ import { Avatar, FacePicker } from '../components/Face';
 import { ErrorBox } from '../components/ui';
 import { api } from '../lib/api';
 import { squareImage } from '../lib/image';
+import { REWARD_ICONS, rewardIconUrl, rewardRule, type RewardKind } from '../lib/rewardIcons';
+import { CheckDropdown } from '../components/CheckDropdown';
 import { useSession, type MemberSummary } from '../lib/session';
 import { PERIODS, TASK_ICONS, type Period } from '../lib/taskIcons';
 import { TaskPicture } from './KidsTasks';
@@ -134,8 +136,13 @@ function MembersSettings() {
                 <span className="capitalize">{m.role}</span>, born {fmtBirthday(m.birthday)}, age {m.age}
               </div>
             </div>
-            <button className="btn btn-ghost py-2" onClick={() => setFaceFor(m)}>
-              <Camera size={18} /> {m.photoUrl ? 'Change face photo' : 'Add face photo'}
+            <button
+              className="btn btn-ghost px-3 py-2"
+              onClick={() => setFaceFor(m)}
+              title={m.photoUrl ? 'Change face photo' : 'Add face photo'}
+              aria-label={`${m.photoUrl ? 'Change' : 'Add'} ${m.name}'s face photo`}
+            >
+              <Camera size={20} />
             </button>
             {m.photoUrl && (
               <button className="btn btn-ghost px-3 py-2 text-muted" title="Remove face photo" aria-label={`Remove ${m.name}'s face photo`} onClick={() => removeFace(m)}>
@@ -264,7 +271,7 @@ function AddMemberForm({ onDone }: { onDone: () => void }) {
 
 // ---------------- Kids tasks ----------------
 
-type Template = { id: number; title: string; icon: string; period: Period; sort_order: number; member_ids: string[] | null };
+type Template = { id: number; title: string; icon: string; period: Period; sort_order: number; member_ids: string[] | null; mandatory: boolean };
 
 function TasksSettings() {
   const { me } = useSession();
@@ -305,9 +312,40 @@ function TasksSettings() {
     }
   }
 
+  async function saveMandatory(ids: string[] | null) {
+    if (!tasks) return;
+    const chosen = ids === null ? tasks.map((t) => t.id) : ids.map(Number);
+    setError(null);
+    setTasks((l) => l?.map((t) => ({ ...t, mandatory: chosen.includes(t.id) })) ?? null);
+    try {
+      await api('/settings/kid-tasks/mandatory', { method: 'PUT', body: { taskIds: chosen } });
+    } catch (e) {
+      setError((e as Error).message);
+      load();
+    }
+  }
+
+  const mandatoryIds = tasks?.filter((t) => t.mandatory).map((t) => String(t.id)) ?? [];
+
   return (
     <div className="space-y-6">
       <AddTaskForm onAdded={(t) => setTasks((l) => [...(l ?? []), t])} />
+      {tasks && tasks.length > 0 && (
+        <div className="rounded-2xl border-2 border-line p-4">
+          <div className="text-lg font-extrabold">Must-do tasks</div>
+          <p className="mb-2 text-muted">Tick every task the kids must do. Daily rewards are only earned when all of them are done.</p>
+          <CheckDropdown
+            ariaLabel="Must-do tasks"
+            className="max-w-md"
+            allLabel="All tasks"
+            noneLabel="No must-do tasks"
+            allowNone
+            options={tasks.map((t) => ({ id: String(t.id), label: t.title, icon: <TaskPicture icon={t.icon} className="h-7 w-7 rounded-md" /> }))}
+            selected={mandatoryIds.length === tasks.length ? null : mandatoryIds}
+            onChange={saveMandatory}
+          />
+        </div>
+      )}
       <ErrorBox message={error} />
       {!tasks ? (
         <div className="py-6 text-center text-muted">Loading…</div>
@@ -328,7 +366,10 @@ function TasksSettings() {
                     <li key={t.id} className="flex flex-wrap items-center gap-3 rounded-2xl border-2 border-line p-2 pr-3">
                       <TaskPicture icon={t.icon} className="h-12 w-12 rounded-lg" />
                       <div className="min-w-0 flex-1">
-                        <div className="text-lg font-bold">{t.title}</div>
+                        <div className="text-lg font-bold">
+                          {t.title}
+                          {t.mandatory && <span className="ml-2 rounded-full bg-danger px-2 py-0.5 align-middle text-xs font-bold text-white">Must do</span>}
+                        </div>
                         <button className="text-sm font-semibold text-violet hover:underline" onClick={() => setEditKidsId(editKidsId === t.id ? null : t.id)}>
                           For: {kidNames(t.member_ids, me?.members ?? [])} ✎
                         </button>
@@ -475,14 +516,28 @@ function AddTaskForm({ onAdded }: { onAdded: (t: Template) => void }) {
 
 // ---------------- Rewards ----------------
 
-type Reward = { id: string; title: string; min_score: number; member_ids: string[] | null };
+type Reward = {
+  id: string;
+  title: string;
+  icon: string;
+  kind: RewardKind;
+  min_score: number | null;
+  task_id: number | null;
+  streak_days: number | null;
+  member_ids: string[] | null;
+};
 
 function RewardsSettings() {
   const { me } = useSession();
   const [rewards, setRewards] = useState<Reward[] | null>(null);
+  const [tasks, setTasks] = useState<Template[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [kind, setKind] = useState<RewardKind>('daily');
   const [title, setTitle] = useState('');
-  const [score, setScore] = useState(11);
+  const [score, setScore] = useState(10);
+  const [taskId, setTaskId] = useState('');
+  const [streakDays, setStreakDays] = useState(5);
+  const [icon, setIcon] = useState('gift');
   const [kids, setKids] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -490,16 +545,28 @@ function RewardsSettings() {
     api<{ rewards: Reward[] }>('/settings/rewards')
       .then((r) => setRewards(r.rewards))
       .catch((e) => setError((e as Error).message));
+    api<{ tasks: Template[] }>('/settings/kid-tasks')
+      .then((r) => setTasks(r.tasks))
+      .catch(() => {});
   }, []);
+
+  // Streak rewards are for extra tasks, so must-do tasks are left out of the list
+  const streakTasks = tasks.filter((t) => !t.mandatory);
+  const taskTitle = (id: number | null) => tasks.find((t) => t.id === id)?.title;
 
   async function add(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!title.trim()) return setError('Please enter the reward');
+    if (!title.trim()) return setError('Please write the reward');
+    if (kind === 'streak' && !taskId) return setError('Choose the task');
     setBusy(true);
     try {
-      const { reward } = await api<{ reward: Reward }>('/settings/rewards', { body: { title, minScore: score, memberIds: kids ?? 'all' } });
-      setRewards((l) => [...(l ?? []), reward].sort((a, b) => a.min_score - b.min_score));
+      const body =
+        kind === 'daily'
+          ? { kind, title, icon, minScore: score, memberIds: kids ?? 'all' }
+          : { kind, title, icon, taskId: Number(taskId), streakDays, memberIds: kids ?? 'all' };
+      const { reward } = await api<{ reward: Reward }>('/settings/rewards', { body });
+      setRewards((l) => [...(l ?? []), reward]);
       setTitle('');
     } catch (err) {
       setError((err as Error).message);
@@ -518,15 +585,30 @@ function RewardsSettings() {
     }
   }
 
+  const choice = (on: boolean) =>
+    `rounded-2xl border-2 px-4 py-3 text-left font-bold transition ${on ? 'border-violet bg-violet-soft text-violet' : 'border-line bg-white text-muted'}`;
+
   return (
     <div className="space-y-6">
       <form onSubmit={add} className="space-y-4 rounded-2xl bg-soft p-4 sm:p-5">
-        <div className="text-lg font-extrabold text-violet">Add a daily reward</div>
-        <p className="text-muted">A kid earns the reward on a day they tick at least this many tasks (e.g. 11 of 14).</p>
-        <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-          <Field label="Reward">
-            <input className="input" placeholder="e.g. 30 minutes of screen time" maxLength={80} value={title} onChange={(e) => setTitle(e.target.value)} />
-          </Field>
+        <div className="text-lg font-extrabold text-violet">Add a reward</div>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <button type="button" className={choice(kind === 'daily')} onClick={() => setKind('daily')}>
+            Tasks per day
+            <span className="block text-sm font-medium text-muted">Earned on a day with enough tasks done, including all must-do tasks</span>
+          </button>
+          <button type="button" className={choice(kind === 'streak')} onClick={() => setKind('streak')}>
+            One task, days in a row
+            <span className="block text-sm font-medium text-muted">Earned when a chosen task is done several days in a row</span>
+          </button>
+        </div>
+
+        <Field label="Reward">
+          <input className="input" placeholder="e.g. 30 minutes of screen time" maxLength={80} value={title} onChange={(e) => setTitle(e.target.value)} />
+        </Field>
+
+        {kind === 'daily' ? (
           <Field label="Tasks needed per day">
             <input
               className="input sm:w-40"
@@ -537,7 +619,50 @@ function RewardsSettings() {
               onChange={(e) => setScore(Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
             />
           </Field>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+            <Field label="Task">
+              <select className="input" value={taskId} onChange={(e) => setTaskId(e.target.value)}>
+                <option value="">Choose a task…</option>
+                {streakTasks.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.title}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Days in a row">
+              <input
+                className="input sm:w-40"
+                type="number"
+                min={2}
+                max={60}
+                value={streakDays}
+                onChange={(e) => setStreakDays(Math.max(2, Math.min(60, Number(e.target.value) || 2)))}
+              />
+            </Field>
+          </div>
+        )}
+
+        <div>
+          <span className="label">Picture</span>
+          <div className="grid grid-cols-5 gap-2 rounded-2xl bg-white p-2 sm:grid-cols-10">
+            {REWARD_ICONS.map((i) => (
+              <button
+                key={i.key}
+                type="button"
+                title={i.label}
+                aria-label={i.label}
+                aria-pressed={icon === i.key}
+                onClick={() => setIcon(i.key)}
+                className={`grid aspect-square place-items-center rounded-xl border-2 p-1 transition ${icon === i.key ? 'border-violet bg-violet-soft' : 'border-transparent hover:bg-soft'}`}
+              >
+                <img src={rewardIconUrl(i.key)} alt="" className="h-full w-full" />
+              </button>
+            ))}
+          </div>
         </div>
+
         <div>
           <span className="label">For which kids</span>
           <KidPicker value={kids} onChange={setKids} />
@@ -555,15 +680,15 @@ function RewardsSettings() {
       ) : (
         <ul className="space-y-2">
           {rewards.map((r) => (
-            <li key={r.id} className="flex items-center gap-3 rounded-2xl border-2 border-line p-3">
-              <TaskPicture icon="gift" className="h-12 w-12 rounded-lg" />
+            <li key={r.id} className="flex items-center gap-3 rounded-2xl border-2 border-line bg-white p-3">
+              <img src={rewardIconUrl(r.icon)} alt="" className="h-12 w-12 shrink-0" />
               <div className="min-w-0 flex-1">
                 <div className="text-lg font-bold">{r.title}</div>
                 <div className="text-muted">
-                  {r.min_score} tasks a day, for {kidNames(r.member_ids, me?.members ?? [])}
+                  {rewardRule({ ...r, task_title: taskTitle(r.task_id) })}, for {kidNames(r.member_ids, me?.members ?? [])}
                 </div>
               </div>
-              <button aria-label={`Remove ${r.title}`} className="rounded-lg p-2 text-muted hover:bg-soft hover:text-danger" onClick={() => remove(r.id)}>
+              <button aria-label={`Remove ${r.title}`} title="Remove reward" className="rounded-lg p-2 text-muted hover:bg-soft hover:text-danger" onClick={() => remove(r.id)}>
                 <Trash2 size={20} />
               </button>
             </li>

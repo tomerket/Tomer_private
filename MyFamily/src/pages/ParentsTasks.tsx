@@ -1,9 +1,11 @@
-import { CalendarRange, Check, ChevronLeft, ClipboardList, Pencil, Plus, Trash2, UserRound, X } from 'lucide-react';
+import { CalendarRange, Camera, Check, ChevronLeft, ClipboardList, ImageOff, Pencil, Plus, Trash2, UserRound, X } from 'lucide-react';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { AppLayout } from '../components/AppLayout';
+import { CheckDropdown } from '../components/CheckDropdown';
 import { ErrorBox } from '../components/ui';
 import { api, today } from '../lib/api';
+import { resizeImage } from '../lib/image';
 import { useSession } from '../lib/session';
 
 type ParentTask = {
@@ -17,15 +19,44 @@ type ParentTask = {
   assigned_to: string | null;
   created_by: string | null;
   created_at: string;
+  photo_path: string | null;
+  photoUrl: string | null;
 };
-type Filter = 'today' | 'open';
+type Filter = 'today' | 'due' | 'open';
 type Patch = Partial<{ subject: string; description: string; done: boolean; day: string; dueDate: string }>;
+
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: 'today', label: 'Today' },
+  { key: 'due', label: 'Due today' },
+  { key: 'open', label: 'All open' },
+];
+const ANYONE = 'anyone'; // filter option for tasks not given to a specific parent
 
 const mdy = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(0, 4)}`;
 const localDay = (ts: string) => {
   const d = new Date(ts);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+
+/** Photo button: on a phone this offers the camera or the gallery; on a computer, a file. */
+function PhotoPicker({ label, onPick, disabled }: { label: string; onPick: (f: File) => void; disabled?: boolean }) {
+  return (
+    <label className={`btn btn-ghost cursor-pointer py-2 ${disabled ? 'opacity-60' : ''}`}>
+      <Camera size={20} /> {label}
+      <input
+        type="file"
+        accept="image/*"
+        className="hidden"
+        disabled={disabled}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) onPick(f);
+          e.target.value = '';
+        }}
+      />
+    </label>
+  );
+}
 
 export default function ParentsTasks() {
   const { me } = useSession();
@@ -36,19 +67,22 @@ export default function ParentsTasks() {
   const todayIso = today();
 
   const [filter, setFilter] = useState<Filter>('today');
+  const [who, setWho] = useState<string[] | null>(null); // null = everyone
   const [tasks, setTasks] = useState<ParentTask[] | null>(null);
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
   const [assignee, setAssignee] = useState('');
   const [start, setStart] = useState(todayIso);
   const [end, setEnd] = useState('');
+  const [photo, setPhoto] = useState<Blob | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const q = filter === 'open' ? 'filter=open' : `day=${todayIso}`;
+      const q = filter === 'today' ? `day=${todayIso}` : 'filter=open';
       setTasks((await api<{ tasks: ParentTask[] }>(`/parent-tasks?${q}`)).tasks);
     } catch (e) {
       setError((e as Error).message);
@@ -59,6 +93,18 @@ export default function ParentsTasks() {
     load();
   }, [load]);
 
+  useEffect(() => () => void (photoPreview && URL.revokeObjectURL(photoPreview)), [photoPreview]);
+
+  async function pickNewPhoto(f: File) {
+    try {
+      const b = await resizeImage(f, 1600);
+      setPhoto(b);
+      setPhotoPreview(URL.createObjectURL(b));
+    } catch {
+      setError("Couldn't read that photo. Please try another one.");
+    }
+  }
+
   async function add(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -67,11 +113,16 @@ export default function ParentsTasks() {
     if (end < start) return setError('The end date can’t be before the start date');
     setBusy(true);
     try {
-      await api('/parent-tasks', { body: { subject, description, day: start, dueDate: end, assignedTo: assignee || null } });
+      const { task } = await api<{ task: ParentTask }>('/parent-tasks', {
+        body: { subject, description, day: start, dueDate: end, assignedTo: assignee || null },
+      });
+      if (photo) await api(`/parent-tasks/${task.id}/photo`, { raw: photo });
       setSubject('');
       setDescription('');
       setEnd('');
       setStart(todayIso);
+      setPhoto(null);
+      setPhotoPreview(null);
       await load();
     } catch (err) {
       setError((err as Error).message);
@@ -90,6 +141,18 @@ export default function ParentsTasks() {
     }
   }
 
+  async function setTaskPhoto(id: string, f: File | null) {
+    setError(null);
+    try {
+      const { task } = f
+        ? await api<{ task: ParentTask }>(`/parent-tasks/${id}/photo`, { raw: await resizeImage(f, 1600) })
+        : await api<{ task: ParentTask }>(`/parent-tasks/${id}/photo`, { method: 'DELETE' });
+      setTasks((list) => list?.map((t) => (t.id === id ? task : t)) ?? null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   async function remove(id: string) {
     if (!window.confirm('Delete this task?')) return;
     setError(null);
@@ -101,8 +164,14 @@ export default function ParentsTasks() {
     }
   }
 
-  // Today: started and not done, plus anything finished today (in this browser's time zone)
-  const visible = (tasks ?? []).filter((t) => filter === 'open' || !t.done || (t.done_at && localDay(t.done_at) === todayIso));
+  const visible = (tasks ?? [])
+    // Today: started and not done, plus anything finished today. Due today: open tasks that end today or earlier.
+    .filter((t) => {
+      if (filter === 'today') return !t.done || (t.done_at && localDay(t.done_at) === todayIso);
+      if (filter === 'due') return !t.done && t.due_date <= todayIso;
+      return true;
+    })
+    .filter((t) => who === null || who.includes(t.assigned_to ?? ANYONE));
   const doneCount = visible.filter((t) => t.done).length;
 
   return (
@@ -113,7 +182,7 @@ export default function ParentsTasks() {
 
       <div className="mx-auto max-w-5xl text-xl">
         {canEdit && (
-          <form onSubmit={add} className="mb-5 space-y-3 rounded-2xl bg-soft p-4">
+          <form onSubmit={add} className="mb-5 space-y-3 rounded-[28px] bg-soft p-4 sm:p-5">
             <div className="text-2xl font-extrabold">New task</div>
             <label className="block">
               <span className="label">Subject *</span>
@@ -129,6 +198,26 @@ export default function ParentsTasks() {
                 onChange={(e) => setDescription(e.target.value)}
               />
             </label>
+            <div className="flex flex-wrap items-center gap-3">
+              <PhotoPicker label={photo ? 'Change photo' : 'Add a photo'} onPick={pickNewPhoto} disabled={busy} />
+              {photoPreview && (
+                <span className="inline-flex items-center gap-2">
+                  <img src={photoPreview} alt="Photo for the new task" className="h-16 w-16 rounded-2xl object-cover" />
+                  <button
+                    type="button"
+                    className="rounded-lg p-2 text-muted hover:bg-white hover:text-danger"
+                    title="Remove photo"
+                    aria-label="Remove photo"
+                    onClick={() => {
+                      setPhoto(null);
+                      setPhotoPreview(null);
+                    }}
+                  >
+                    <Trash2 size={20} />
+                  </button>
+                </span>
+              )}
+            </div>
             <div className="grid gap-3 sm:grid-cols-[auto_auto_1fr_auto] sm:items-end">
               <label>
                 <span className="label">Start date *</span>
@@ -154,26 +243,39 @@ export default function ParentsTasks() {
                 <span />
               )}
               <button className="btn btn-primary px-8 py-4 !text-2xl" disabled={busy || !subject.trim() || !start || !end}>
-                <Plus size={22} /> Add
+                <Plus size={22} /> {busy ? 'Adding…' : 'Add'}
               </button>
             </div>
           </form>
         )}
 
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div className="grid grid-cols-2 gap-1 rounded-xl bg-soft p-1">
-            {(['today', 'open'] as Filter[]).map((f) => (
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="grid grid-cols-3 gap-1 rounded-full bg-soft p-1">
+            {FILTERS.map((f) => (
               <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`rounded-lg px-6 py-3 text-xl font-bold transition ${filter === f ? 'bg-white text-violet shadow' : 'text-muted'}`}
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                className={`rounded-full px-5 py-2.5 text-lg font-bold transition ${filter === f.key ? 'bg-white text-violet shadow' : 'text-muted'}`}
               >
-                {f === 'today' ? 'Today' : 'All open'}
+                {f.label}
               </button>
             ))}
           </div>
+          {parents.length > 1 && (
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-semibold text-muted">For</span>
+              <CheckDropdown
+                ariaLabel="Show tasks for"
+                className="w-56"
+                allLabel="Everyone"
+                options={[...parents.map((p) => ({ id: p.id, label: p.name })), { id: ANYONE, label: 'Anyone (not given to someone)' }]}
+                selected={who}
+                onChange={setWho}
+              />
+            </div>
+          )}
           {visible.length > 0 && filter === 'today' && (
-            <span className="text-xl font-bold text-muted">
+            <span className="ml-auto text-xl font-bold text-muted">
               {doneCount}/{visible.length} done
             </span>
           )}
@@ -185,7 +287,7 @@ export default function ParentsTasks() {
           !error && <div className="py-10 text-center text-muted">Loading…</div>
         ) : visible.length === 0 ? (
           <div className="rounded-2xl border-2 border-dashed border-line py-12 text-center text-2xl text-muted">
-            {filter === 'today' ? 'No tasks for today yet.' : 'Nothing open. Nice work!'}
+            {filter === 'today' ? 'No tasks for today yet.' : filter === 'due' ? 'Nothing due today.' : 'Nothing open. Nice work!'}
           </div>
         ) : (
           <ul className="space-y-3">
@@ -199,6 +301,7 @@ export default function ParentsTasks() {
                 creatorName={nameOf(t.created_by)}
                 onToggle={() => patch(t.id, { done: !t.done })}
                 onSave={(p) => patch(t.id, p)}
+                onPhoto={(f) => setTaskPhoto(t.id, f)}
                 onDelete={() => remove(t.id)}
               />
             ))}
@@ -226,6 +329,7 @@ function TaskItem({
   creatorName,
   onToggle,
   onSave,
+  onPhoto,
   onDelete,
 }: {
   task: ParentTask;
@@ -235,6 +339,7 @@ function TaskItem({
   creatorName?: string;
   onToggle: () => void;
   onSave: (p: Patch) => void;
+  onPhoto: (f: File | null) => void;
   onDelete: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -253,14 +358,15 @@ function TaskItem({
   }
 
   return (
-    <li className={`flex items-start gap-4 rounded-2xl border-2 p-4 transition ${task.done ? 'border-line bg-soft' : 'border-violet-soft bg-white'}`}>
+    <li className={`flex items-start gap-4 rounded-[20px] border-2 p-4 transition ${task.done ? 'border-line bg-soft' : 'border-line bg-white'}`}>
       <button
         aria-label={task.done ? 'Mark as not done' : 'Mark as done'}
         disabled={!canEdit}
         onClick={onToggle}
-        className={`mt-1 grid h-11 w-11 shrink-0 place-items-center rounded-xl border-[3px] transition ${task.done ? 'border-violet bg-violet' : 'border-violet bg-white'}`}
+        className="stamp mt-1 h-12 w-12"
+        data-on={task.done}
       >
-        {task.done && <Check size={28} strokeWidth={4} className="text-white" />}
+        {task.done && <Check size={24} strokeWidth={4} className="text-white" />}
       </button>
 
       <div className="min-w-0 flex-1">
@@ -284,6 +390,14 @@ function TaskItem({
                 <input type="date" className="input !text-lg" value={end} min={start} onChange={(e) => setEnd(e.target.value)} />
               </label>
             </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <PhotoPicker label={task.photoUrl ? 'Change photo' : 'Add a photo'} onPick={(f) => onPhoto(f)} />
+              {task.photoUrl && (
+                <button className="btn btn-ghost px-3 py-2 text-muted" title="Remove photo" aria-label="Remove photo" onClick={() => onPhoto(null)}>
+                  <ImageOff size={20} />
+                </button>
+              )}
+            </div>
             <div className="flex gap-2">
               <button
                 className="btn btn-primary py-2"
@@ -301,33 +415,40 @@ function TaskItem({
             </div>
           </div>
         ) : (
-          <>
-            <div className="flex flex-wrap items-center gap-2">
-              <p className={`break-words text-2xl font-extrabold ${task.done ? 'text-muted line-through' : ''}`}>{task.subject}</p>
-              <span className={`rounded-full px-2.5 py-0.5 text-base font-bold ${st.cls}`}>{st.text}</span>
+          <div className="flex gap-4">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className={`break-words text-2xl font-extrabold ${task.done ? 'text-muted line-through' : ''}`}>{task.subject}</p>
+                <span className={`rounded-full px-2.5 py-0.5 text-base font-bold ${st.cls}`}>{st.text}</span>
+              </div>
+              {task.text && <p className={`mt-1 whitespace-pre-wrap break-words text-lg ${task.done ? 'text-muted' : 'text-ink'}`}>{task.text}</p>}
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-base text-muted">
+                <span className="inline-flex items-center gap-1 font-semibold text-ink">
+                  <CalendarRange size={17} /> {mdy(task.day)} to {mdy(task.due_date)}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <UserRound size={17} /> For <b className="text-ink">{assigneeName ?? 'anyone'}</b>
+                </span>
+                <span>
+                  Added by {creatorName ?? 'someone'} on {mdy(localDay(task.created_at))}
+                </span>
+              </div>
             </div>
-            {task.text && <p className={`mt-1 whitespace-pre-wrap break-words text-lg ${task.done ? 'text-muted' : 'text-ink'}`}>{task.text}</p>}
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-base text-muted">
-              <span className="inline-flex items-center gap-1 font-semibold text-ink">
-                <CalendarRange size={17} /> {mdy(task.day)} → {mdy(task.due_date)}
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <UserRound size={17} /> For: <b className="text-ink">{assigneeName ?? 'Anyone'}</b>
-              </span>
-              <span>
-                Added by {creatorName ?? 'someone'} on {mdy(localDay(task.created_at))}
-              </span>
-            </div>
-          </>
+            {task.photoUrl && (
+              <a href={task.photoUrl} target="_blank" rel="noreferrer" title="Open photo" className="shrink-0">
+                <img src={task.photoUrl} alt={`Photo for ${task.subject}`} className="h-20 w-20 rounded-2xl object-cover sm:h-24 sm:w-24" />
+              </a>
+            )}
+          </div>
         )}
       </div>
 
       {canEdit && !editing && (
         <div className="flex shrink-0 gap-1">
-          <button aria-label="Edit task" className="rounded-lg p-2 text-muted hover:bg-soft hover:text-violet" onClick={() => setEditing(true)}>
+          <button aria-label="Edit task" title="Edit task" className="rounded-lg p-2 text-muted hover:bg-soft hover:text-violet" onClick={() => setEditing(true)}>
             <Pencil size={24} />
           </button>
-          <button aria-label="Delete task" className="rounded-lg p-2 text-muted hover:bg-soft hover:text-danger" onClick={onDelete}>
+          <button aria-label="Delete task" title="Delete task" className="rounded-lg p-2 text-muted hover:bg-soft hover:text-danger" onClick={onDelete}>
             <Trash2 size={24} />
           </button>
         </div>

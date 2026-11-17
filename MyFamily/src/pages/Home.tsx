@@ -62,9 +62,8 @@ export default function Home() {
                 <input type="file" accept="image/*" className="hidden" disabled={busy} onChange={(e) => changePhoto(e.target.files?.[0])} />
               </label>
               {hasPhoto && (
-                <button className="btn btn-ghost px-3 py-2 text-danger" disabled={busy} onClick={removePhoto} title="Remove photo">
+                <button className="btn btn-ghost px-3 py-2 text-danger" disabled={busy} onClick={removePhoto} title="Remove photo" aria-label="Remove photo">
                   <Trash2 size={20} />
-                  <span className="hidden sm:inline">Remove photo</span>
                 </button>
               )}
             </div>
