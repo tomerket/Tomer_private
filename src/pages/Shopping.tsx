@@ -9,7 +9,6 @@ import { useSession } from '../lib/session';
 
 type Item = { id: string; category: string; name: string; bought: boolean; bought_at: string | null; created_by: string | null; created_at: string };
 
-const VISIBLE_COLUMNS = 5;
 
 export default function Shopping() {
   const { me } = useSession();
@@ -136,13 +135,13 @@ export default function Shopping() {
       {confirmDialog}
       <form onSubmit={add} className="mb-5 space-y-3 rounded-[28px] bg-soft p-4 sm:p-5">
         <div className="text-2xl font-extrabold">Add to the list</div>
-        <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)_auto] md:items-start">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)_auto] xl:items-start">
           <div>
             <span className="label">Category *</span>
             {newCat === null ? (
               <div className="flex gap-2">
                 <select ref={categoryRef} className="input min-w-0 flex-1" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
-                  <option value="">Choose a category…</option>
+                  <option value="">Choose…</option>
                   {allNames.map((c) => (
                     <option key={c} value={c}>
                       {c}
@@ -198,7 +197,7 @@ export default function Shopping() {
               }}
             />
           </label>
-          <button className="btn btn-primary md:mt-7" disabled={busy || !category || !product.trim() || newCat !== null}>
+          <button className="btn btn-primary xl:mt-7"disabled={busy || !category || !product.trim() || newCat !== null}>
             <Plus size={20} /> {busy ? 'Adding…' : 'Add'}
           </button>
         </div>
@@ -239,7 +238,7 @@ export default function Shopping() {
               return (
                 <section key={col.name} className="flex flex-col overflow-hidden rounded-2xl border-2 bg-white" style={{ borderColor: c.bg }}>
                   <div className="flex items-center gap-1 px-3 py-2.5" style={{ background: c.bg, color: c.fg }}>
-                    <h2 className="min-w-0 flex-1 truncate text-xl font-extrabold">{col.name}</h2>
+                    <h2 className="min-w-0 flex-1 break-words text-xl font-extrabold leading-tight">{col.name}</h2>
                     <span className="shrink-0 text-sm font-bold">{col.items.length === 0 ? '' : left === 0 ? 'All bought' : `${left} left`}</span>
                     {isParent && anyBought && (
                       <button className="rounded-lg p-1 hover:bg-white/60" title={`Remove bought from ${col.name}`} aria-label={`Remove bought from ${col.name}`} onClick={() => clearBought(col.name)}>
@@ -322,7 +321,7 @@ function Columns({ count, children }: { count: number; children: React.ReactNode
       {hidden && (
         <div role="status" className="mb-2 flex items-center gap-2 rounded-2xl border-2 border-sun bg-sun-soft px-3 py-2 font-bold text-sun-ink">
           <span className="flex-1">
-            {count > VISIBLE_COLUMNS ? `${count} categories: only ${VISIBLE_COLUMNS} fit on the screen.` : 'Some categories are off the screen.'} Scroll {scroll.right ? 'right' : 'left'} to see the rest.
+            {count} categories, not all fit on the screen. Scroll {scroll.right ? 'right' : 'left'} to see the rest.
           </span>
           <button className="rounded-lg bg-white p-1.5 disabled:opacity-30" aria-label="Scroll left" disabled={!scroll.left} onClick={() => by(-1)}>
             <ChevronLeft size={20} />

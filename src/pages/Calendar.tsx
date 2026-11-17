@@ -243,18 +243,19 @@ export default function Calendar() {
 
       <ErrorBox message={error} />
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      {/* One column on phones/tablets (never wider than the screen); calendar + side list on wide screens */}
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         {/* Month grid */}
-        <section>
+        <section className="min-w-0">
           <div className="mb-3 flex items-center gap-2">
             <button aria-label="Previous month" className="rounded-xl bg-soft p-2 text-violet hover:bg-violet-soft" onClick={() => move(-1)}>
               <ChevronLeft size={24} />
             </button>
-            <h2 className="min-w-[11rem] text-center text-2xl font-extrabold">{monthTitle}</h2>
+            <h2 className="min-w-0 text-center text-xl font-extrabold sm:min-w-[11rem] sm:text-2xl">{monthTitle}</h2>
             <button aria-label="Next month" className="rounded-xl bg-soft p-2 text-violet hover:bg-violet-soft" onClick={() => move(1)}>
               <ChevronRight size={24} />
             </button>
-            <button className="btn btn-ghost ml-auto px-4 py-2" onClick={() => pick(todayIso)}>
+            <button className="btn btn-ghost ml-auto shrink-0 px-4 py-2" onClick={() => pick(todayIso)}>
               Today
             </button>
           </div>
@@ -285,7 +286,7 @@ export default function Calendar() {
                     }}
                     aria-pressed={isSel}
                     aria-label={`${niceDay(day, todayIso)}${count ? `, ${count} item${count > 1 ? 's' : ''}` : ''}`}
-                    className={`relative flex min-h-[64px] flex-col items-stretch gap-0.5 border-r border-t border-line p-1 text-left transition sm:min-h-[96px] sm:p-1.5 [&:nth-child(7n)]:border-r-0 ${
+                    className={`relative flex min-h-[64px] min-w-0 flex-col items-stretch gap-0.5 border-r border-t border-line p-1 text-left transition sm:min-h-[96px] sm:p-1.5 [&:nth-child(7n)]:border-r-0 ${
                       isSel ? 'bg-violet-soft ring-2 ring-inset ring-violet' : inMonth ? 'bg-white hover:bg-soft' : 'bg-soft/60 hover:bg-soft'
                     }`}
                   >
@@ -335,7 +336,7 @@ export default function Calendar() {
         </section>
 
         {/* Right side: the chosen day, or the next 10 activities */}
-        <section className="rounded-2xl bg-soft p-4">
+        <section className="min-w-0 rounded-2xl bg-soft p-4">
           <div className="mb-3 grid grid-cols-2 gap-1 rounded-full bg-white p-1">
             <button
               aria-pressed={panel === 'day'}

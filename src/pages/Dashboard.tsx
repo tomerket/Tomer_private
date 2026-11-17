@@ -226,12 +226,22 @@ function Legend({ kids }: { kids: { name: string; color: string }[] }) {
 /** Daily completion %, one line per kid, with a hover crosshair + tooltip. */
 function LineChart({ stats, colorOf, rangeText }: { stats: KidStats[]; colorOf: (id: string) => string; rangeText: string }) {
   const days = stats[0].days.map((d) => d.day);
-  const W = 640, H = 240, L = 40, R = 12, T = 12, B = 28;
+  // Drawn at its real width, so the text stays the same readable size on phones and big screens
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(640);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setWidth(Math.round(e.contentRect.width) || 640));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const W = Math.max(260, width), H = W < 500 ? 200 : 240, L = 40, R = 12, T = 12, B = 28;
   const x = (i: number) => L + (days.length === 1 ? (W - L - R) / 2 : (i * (W - L - R)) / (days.length - 1));
   const y = (p: number) => T + ((100 - p) * (H - T - B)) / 100;
   const [hover, setHover] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
-  const labelEvery = Math.ceil(days.length / 8);
+  const labelEvery = Math.ceil(days.length / Math.max(3, Math.floor((W - L - R) / 56))); // ~56px per date label
 
   function onMove(e: React.PointerEvent) {
     const r = svgRef.current!.getBoundingClientRect();
@@ -246,7 +256,7 @@ function LineChart({ stats, colorOf, rangeText }: { stats: KidStats[]; colorOf: 
         <h3 className="text-xl font-extrabold">Tasks done per day</h3>
         <Range text={rangeText} />
       </div>
-      <div className="relative">
+      <div className="relative" ref={boxRef}>
         <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="w-full touch-none" onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHover(null)} role="img" aria-label="Percent of tasks done per day">
           {[0, 50, 100].map((g) => (
             <g key={g}>
@@ -364,7 +374,8 @@ function RewardsTotals({ stats, colorOf, rangeText }: { stats: KidStats[]; color
         <p className="px-4 py-4 text-muted">No rewards yet. Add them in Settings.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full table-fixed text-left">
+          {/* On small screens the table keeps its columns readable and scrolls sideways */}
+          <table className="w-full table-fixed text-left" style={{ minWidth: 220 + stats.length * 112 + 96 }}>
             <colgroup>
               <col />
               {stats.map((k) => (

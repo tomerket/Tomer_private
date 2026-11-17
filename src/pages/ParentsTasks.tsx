@@ -427,14 +427,14 @@ function TaskItem({
 
   return (
     <li
-      className={`flex items-start gap-4 rounded-[20px] border-2 border-l-[8px] p-4 transition ${task.done ? 'border-line bg-soft' : 'border-line bg-white'}`}
+      className={`flex items-start gap-3 rounded-[20px] border-2 border-l-[8px] p-3 transition sm:gap-4 sm:p-4 ${task.done ? 'border-line bg-soft' : 'border-line bg-white'}`}
       style={{ borderLeftColor: assigneeColor.fg }}
     >
       <button
         aria-label={task.done ? 'Mark as not done' : 'Mark as done'}
         disabled={!canEdit}
         onClick={onToggle}
-        className="stamp stamp-bold mt-1 h-12 w-12"
+        className="stamp stamp-bold mt-1 h-10 w-10 sm:h-12 sm:w-12"
         data-on={task.done}
       >
         {task.done && <Check size={28} strokeWidth={5} className="text-white" />}
@@ -494,10 +494,11 @@ function TaskItem({
             </div>
           </div>
         ) : (
-          <div className="flex gap-4">
+          // Phones: picture under the text so the text gets the full width
+          <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <p className={`break-words text-2xl font-extrabold ${task.done ? 'text-muted line-through' : ''}`}>{task.subject}</p>
+                <p className={`min-w-0 break-words text-xl font-extrabold sm:text-2xl ${task.done ? 'text-muted line-through' : ''}`}>{task.subject}</p>
                 <span className={`rounded-full px-2.5 py-0.5 text-base font-bold ${st.cls}`}>{st.text}</span>
               </div>
               {task.text && <p className={`mt-1 whitespace-pre-wrap break-words text-lg ${task.done ? 'text-muted' : 'text-ink'}`}>{task.text}</p>}
@@ -525,7 +526,7 @@ function TaskItem({
       </div>
 
       {canEdit && !editing && (
-        <div className="flex shrink-0 gap-1">
+        <div className="flex shrink-0 flex-col gap-1 sm:flex-row">
           <button aria-label="Edit task" title="Edit task" className="rounded-lg p-2 text-muted hover:bg-soft hover:text-violet" onClick={() => setEditing(true)}>
             <Pencil size={24} />
           </button>
