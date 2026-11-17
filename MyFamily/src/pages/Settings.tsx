@@ -75,6 +75,9 @@ function kidNames(ids: string[] | null, members: MemberSummary[]) {
 
 // ---------------- Family members ----------------
 
+/** Round outline icon button (not .btn, whose padding can't be overridden). */
+const ICON_BTN = 'grid h-10 w-10 shrink-0 place-items-center rounded-full border-2 border-line bg-white hover:bg-violet-soft sm:h-11 sm:w-11';
+
 function fmtBirthday(iso?: string) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
@@ -129,19 +132,27 @@ function MembersSettings() {
       )}
       <ul className="space-y-2">
         {me?.members.map((m) => (
-          <li key={m.id} className="flex flex-wrap items-center gap-3 rounded-2xl border-2 border-line p-3">
-            <Avatar name={m.name} photoUrl={m.photoUrl} role={m.role} size={56} />
-            <div className="min-w-0 flex-1">
+          <li key={m.id} className="flex flex-wrap items-center gap-2 rounded-2xl border-2 border-line p-3 sm:gap-3">
+            <span className="shrink-0 sm:hidden">
+              <Avatar name={m.name} photoUrl={m.photoUrl} role={m.role} size={44} />
+            </span>
+            <span className="hidden shrink-0 sm:block">
+              <Avatar name={m.name} photoUrl={m.photoUrl} role={m.role} size={56} />
+            </span>
+            {/* Phones: name + details take the row; the buttons go on the next row */}
+            <div className="w-[calc(100%-3.25rem)] min-w-0 sm:w-auto sm:flex-1">
               <div className="text-lg font-extrabold">
                 {m.name}
                 {m.is_admin && <span className="ml-2 rounded-full bg-violet-soft px-2 py-0.5 text-xs font-bold text-violet">Admin</span>}
               </div>
-              <div className="text-muted">
-                <span className="capitalize">{m.role}</span>, {fmtBirthday(m.birthday)}, age {m.age}
+              {/* One row, e.g. "Parent 05-18-1987, age 39" */}
+              <div className="whitespace-nowrap text-sm text-muted sm:text-base">
+                <span className="capitalize">{m.role}</span> {fmtBirthday(m.birthday)}, age {m.age}
               </div>
             </div>
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
             <button
-              className="btn btn-ghost px-3 py-2"
+              className={ICON_BTN}
               onClick={() => setFaceFor(m)}
               title={m.photoUrl ? 'Change face photo' : 'Add face photo'}
               aria-label={`${m.photoUrl ? 'Change' : 'Add'} ${m.name}'s face photo`}
@@ -149,7 +160,7 @@ function MembersSettings() {
               <Camera size={20} />
             </button>
             {m.photoUrl && (
-              <button className="btn btn-ghost px-3 py-2 text-muted" title="Remove face photo" aria-label={`Remove ${m.name}'s face photo`} onClick={() => removeFace(m)}>
+              <button className={`${ICON_BTN} text-muted`} title="Remove face photo" aria-label={`Remove ${m.name}'s face photo`} onClick={() => removeFace(m)}>
                 <ImageOff size={18} />
               </button>
             )}
@@ -169,6 +180,7 @@ function MembersSettings() {
                   <UserMinus size={18} /> Remove
                 </button>
               ))}
+            </div>
           </li>
         ))}
       </ul>

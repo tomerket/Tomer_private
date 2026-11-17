@@ -2,18 +2,24 @@ import { Router, type Request } from 'express';
 import { memberOf, requireCaller, type Member } from '../auth.js';
 import { db } from '../supabase.js';
 import { handle, HttpError, requireText } from '../util.js';
+import { canSee, parseSharedWith, visibleTo } from '../sharing.js';
 
 export const shoppingRouter = Router();
 shoppingRouter.use('/shopping', requireCaller);
 
-const COLS = 'id, category, name, bought, bought_at, created_by, created_at';
+const COLS = 'id, category, name, bought, bought_at, shared_with, created_by, created_at';
 const MAX_ITEMS_PER_ADD = 30;
 
-/** Parents can remove anything; kids only what they added. */
-async function itemFor(req: Request): Promise<{ me: Member; item: { id: string; created_by: string | null } }> {
+/** A product this member can see (otherwise 404). Parents can remove anything they see; kids only what they added. */
+async function itemFor(req: Request): Promise<{ me: Member; item: { id: string; created_by: string | null; shared_with: string[] | null } }> {
   const me = memberOf(req);
-  const { data } = await db().from('shopping_items').select('id, created_by').eq('id', String(req.params.id)).eq('family_id', me.family_id).maybeSingle();
-  if (!data) throw new HttpError(404, 'Product not found');
+  const { data } = await db()
+    .from('shopping_items')
+    .select('id, created_by, shared_with')
+    .eq('id', String(req.params.id))
+    .eq('family_id', me.family_id)
+    .maybeSingle();
+  if (!data || !canSee(data, me)) throw new HttpError(404, 'Product not found');
   return { me, item: data };
 }
 
@@ -21,7 +27,13 @@ shoppingRouter.get(
   '/shopping',
   handle(async (req, res) => {
     const me = memberOf(req);
-    const { data, error } = await db().from('shopping_items').select(COLS).eq('family_id', me.family_id).order('category').order('created_at');
+    const { data, error } = await db()
+      .from('shopping_items')
+      .select(COLS)
+      .eq('family_id', me.family_id)
+      .or(visibleTo(me))
+      .order('category')
+      .order('created_at');
     if (error) throw error;
     res.json({ items: data ?? [] });
   }),
@@ -35,7 +47,8 @@ shoppingRouter.post(
     const category = requireText(req.body?.category, 'Category', 40);
     const names: unknown[] = Array.isArray(req.body?.names) ? req.body.names : [req.body?.name];
     if (names.length === 0 || names.length > MAX_ITEMS_PER_ADD) throw new HttpError(400, `Add 1 to ${MAX_ITEMS_PER_ADD} products at a time`);
-    const rows = names.map((n) => ({ family_id: me.family_id, created_by: me.id, category, name: requireText(n, 'Product', 80) }));
+    const shared_with = await parseSharedWith(req.body?.sharedWith, me); // not chosen = only the creator
+    const rows = names.map((n) => ({ family_id: me.family_id, created_by: me.id, category, name: requireText(n, 'Product', 80), shared_with }));
     const { data, error } = await db().from('shopping_items').insert(rows).select(COLS);
     if (error) throw error;
     res.status(201).json({ items: data ?? [] });
@@ -58,6 +71,10 @@ shoppingRouter.patch(
       if ('name' in b) patch.name = requireText(b.name, 'Product', 80);
       if ('category' in b) patch.category = requireText(b.category, 'Category', 40);
     }
+    if ('sharedWith' in b) {
+      if (item.created_by !== me.id) throw new HttpError(403, 'Only the person who added it can change who it is shared with');
+      patch.shared_with = await parseSharedWith(b.sharedWith, me);
+    }
     if (Object.keys(patch).length === 0) throw new HttpError(400, 'Nothing to update');
     const { data, error } = await db().from('shopping_items').update(patch).eq('id', item.id).eq('family_id', me.family_id).select(COLS).single();
     if (error) throw error;
@@ -78,7 +95,7 @@ shoppingRouter.delete(
 
 /**
  * Remove many at once (parents only): ?scope=bought (only bought products) or ?scope=all,
- * optionally limited to one ?category=.
+ * optionally limited to one ?category=. Only products this parent can see are removed.
  */
 shoppingRouter.delete(
   '/shopping',
@@ -87,7 +104,7 @@ shoppingRouter.delete(
     if (me.role !== 'parent') throw new HttpError(403, 'Only a parent can clear the list');
     const scope = req.query.scope;
     if (scope !== 'bought' && scope !== 'all') throw new HttpError(400, 'scope must be bought or all');
-    let q = db().from('shopping_items').delete().eq('family_id', me.family_id);
+    let q = db().from('shopping_items').delete().eq('family_id', me.family_id).or(visibleTo(me));
     if (scope === 'bought') q = q.eq('bought', true);
     if (typeof req.query.category === 'string' && req.query.category) q = q.eq('category', req.query.category);
     const { data, error } = await q.select('id');
