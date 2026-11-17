@@ -502,8 +502,9 @@ function RewardsTotals({ stats, colorOf }: { stats: KidStats[]; colorOf: (id: st
   );
 }
 
-/** Task rate: how often each task was completed (all selected kids together), best first. */
+/** Task rate: a bar chart of how often each task was completed (all selected kids together), best first. */
 function TaskRateChart({ stats }: { stats: KidStats[] }) {
+  const [hover, setHover] = useState<number | null>(null);
   const totals = new Map<number, { title: string; icon: string; done: number; total: number }>();
   stats.forEach((k) =>
     k.tasks.forEach((t) => {
@@ -515,27 +516,61 @@ function TaskRateChart({ stats }: { stats: KidStats[] }) {
   );
   const rows = [...totals.values()].filter((r) => r.total > 0).sort((a, b) => pct(b.done, b.total) - pct(a.done, a.total));
   if (!rows.length) return null;
+  const shown = hover !== null ? rows[hover] : null;
   return (
     <section className="rounded-2xl border-2 border-line p-4">
-      <h3 className="text-xl font-extrabold">Task rate</h3>
-      <p className="mb-3 text-muted">How often each task was completed in these dates, best first.</p>
-      <ul className="space-y-1.5">
-        {rows.map((r) => {
-          const v = pct(r.done, r.total);
-          return (
-            <li key={r.title} className="grid grid-cols-[minmax(0,14rem)_1fr_3.5rem] items-center gap-3" title={`${r.title}: done ${r.done} of ${r.total} times`}>
-              <span className="flex min-w-0 items-center gap-2">
-                <TaskPicture icon={r.icon} className="h-8 w-8 shrink-0 rounded-lg" />
-                <span className="truncate font-semibold">{r.title}</span>
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-xl font-extrabold">Task rate</h3>
+        <span className="text-muted" aria-live="polite">
+          {shown ? `${shown.title}: done ${shown.done} of ${shown.total} times (${pct(shown.done, shown.total)}%)` : 'How often each task was completed, best first'}
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <div className="relative" style={{ minWidth: rows.length * 52 }}>
+          {/* Grid lines */}
+          <div className="pointer-events-none absolute inset-x-0 top-6 h-56">
+            {[100, 50, 0].map((g) => (
+              <div key={g} className="absolute inset-x-0 flex items-center gap-2" style={{ bottom: `${g}%` }}>
+                <span className="w-9 text-right text-xs text-muted">{g}%</span>
+                <div className="h-px flex-1 bg-line" />
+              </div>
+            ))}
+          </div>
+          {/* Bars */}
+          <div className="relative ml-11 flex items-end gap-[2px] pt-6" style={{ height: 'calc(14rem + 1.5rem)' }}>
+            {rows.map((r, i) => {
+              const v = pct(r.done, r.total);
+              return (
+                <button
+                  key={r.title}
+                  className="relative flex h-full flex-1 items-end justify-center"
+                  onPointerEnter={() => setHover(i)}
+                  onPointerLeave={() => setHover(null)}
+                  onClick={() => setHover(i)}
+                  aria-label={`${r.title}: ${v}%`}
+                  title={`${r.title}: ${v}%`}
+                >
+                  <span className="absolute text-sm font-extrabold tabular-nums text-ink" style={{ bottom: `calc(${v}% + 4px)` }}>
+                    {v}%
+                  </span>
+                  <span
+                    className={`block w-full max-w-10 rounded-t-[4px] transition ${hover === i ? 'bg-violet-dark' : 'bg-violet'}`}
+                    style={{ height: `${v}%`, minHeight: r.done ? 3 : 0 }}
+                  />
+                </button>
+              );
+            })}
+          </div>
+          {/* Task pictures under the bars */}
+          <div className="ml-11 mt-1.5 flex gap-[2px]">
+            {rows.map((r) => (
+              <span key={r.title} className="flex flex-1 justify-center" title={r.title}>
+                <TaskPicture icon={r.icon} className="h-9 w-9 rounded-lg" />
               </span>
-              <span className="h-5 rounded-r-[4px] bg-soft">
-                <span className="block h-full rounded-r-[4px] bg-violet" style={{ width: `${v}%`, minWidth: r.done ? 4 : 0 }} />
-              </span>
-              <span className="text-right text-lg font-extrabold tabular-nums">{v}%</span>
-            </li>
-          );
-        })}
-      </ul>
+            ))}
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
