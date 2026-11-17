@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, ClipboardCheck, Home, LogOut, Menu, Settings, ShoppingCart, UtensilsCrossed, X, type LucideIcon } from 'lucide-react';
+import { CalendarDays, ClipboardCheck, Home, LogOut, Menu, Settings, ShoppingCart, UtensilsCrossed, X, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useRoles, useSession } from '../lib/session';
@@ -9,14 +9,11 @@ type NavItem = { to: string; label: string; icon: LucideIcon; end?: boolean; sho
 const NAV: NavItem[] = [
   { to: '/', label: 'Home', icon: Home, end: true, show: 'all' },
   { to: '/tasks', label: 'Family Tasks', icon: ClipboardCheck, show: 'all' },
-  { to: '/dashboard', label: 'Dashboard', icon: BarChart3, show: 'parent' },
+  { to: '/calendar', label: 'Calendar', icon: CalendarDays, show: 'all' },
+  { to: '/shopping', label: 'Shopping List', icon: ShoppingCart, show: 'all' },
   { to: '/settings', label: 'Settings', icon: Settings, show: 'admin' },
 ];
-const SOON = [
-  { label: 'Calendar', icon: CalendarDays },
-  { label: 'Shopping List', icon: ShoppingCart },
-  { label: 'Food menu', icon: UtensilsCrossed },
-];
+const SOON = [{ label: 'Food menu', icon: UtensilsCrossed }];
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { me, logout } = useSession();
@@ -105,15 +102,15 @@ export function AppLayout({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="min-h-dvh md:flex md:h-dvh md:gap-4 md:p-4">
+    <div className="min-h-dvh lg:flex lg:h-dvh lg:gap-4 lg:p-4">
       {/* Desktop sidebar */}
-      <aside className="panel hidden w-64 shrink-0 overflow-y-auto md:block">
+      <aside className="panel hidden w-64 shrink-0 overflow-y-auto lg:block">
         <Sidebar />
       </aside>
 
       {/* Mobile drawer */}
       {open && (
-        <div className="fixed inset-0 z-40 md:hidden">
+        <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
           <aside className="absolute inset-y-0 left-0 w-72 overflow-y-auto bg-white shadow-2xl">
             <button className="absolute right-3 top-4 p-2" aria-label="Close menu" onClick={() => setOpen(false)}>
@@ -124,14 +121,14 @@ export function AppLayout({
         </div>
       )}
 
-      <main className="flex min-h-dvh min-w-0 flex-1 flex-col md:min-h-0">
-        <header className="hero-gradient flex items-center gap-3 px-4 py-3 text-white md:hidden">
+      <main className="flex min-h-dvh min-w-0 flex-1 flex-col lg:min-h-0">
+        <header className="hero-gradient flex items-center gap-3 px-4 py-3 text-white lg:hidden">
           <button aria-label="Open menu" className="rounded-xl bg-white/20 p-2" onClick={() => setOpen(true)}>
             <Menu />
           </button>
           <span className="text-2xl font-extrabold">MyFamily</span>
         </header>
-        <div className="panel mx-3 my-3 flex flex-1 flex-col overflow-hidden md:m-0">
+        <div className="panel mx-3 my-3 flex flex-1 flex-col overflow-hidden lg:m-0">
           {!flush && (
             <div className="hero-gradient flex items-center gap-3 px-5 py-3 text-3xl font-extrabold text-white sm:px-7 [&_svg]:text-white!">
               {icon}

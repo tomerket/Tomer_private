@@ -2,6 +2,7 @@ import express, { Router, type Request } from 'express';
 import { memberOf, requireCaller, type Member } from '../auth.js';
 import { db, PHOTO_BUCKET } from '../supabase.js';
 import { REWARD_COLS, type RewardRow } from '../rewards.js';
+import { clientDay, kidsOf, recordRemovals } from '../removals.js';
 import { handle, HttpError, parseDay, requireText } from '../util.js';
 
 export const tasksRouter = Router();
@@ -107,14 +108,11 @@ tasksRouter.delete(
       .eq('family_id', me.family_id)
       .maybeSingle();
     if (!tpl || !appliesTo(tpl, kid.id)) throw new HttpError(404, 'Task not found for this kid');
-    let ids: string[];
-    if (tpl.member_ids) ids = tpl.member_ids.filter((id: string) => id !== kid.id);
-    else {
-      const { data: kids } = await db().from('members').select('id').eq('family_id', me.family_id).eq('role', 'kid');
-      ids = (kids ?? []).map((k) => k.id).filter((id) => id !== kid.id);
-    }
+    const ids = (await kidsOf(me.family_id, tpl.member_ids)).filter((id) => id !== kid.id);
     const { error } = await db().from('kid_task_templates').update({ member_ids: ids }).eq('id', tpl.id);
     if (error) throw error;
+    // From this day on the task no longer counts for this kid; earlier days stay in the Dashboard
+    await recordRemovals(tpl.id, [kid.id], clientDay(req.query.day));
     res.json({ ok: true });
   }),
 );
@@ -163,9 +161,9 @@ async function withPhotoUrls<T extends { photo_path: string | null }>(rows: T[])
   return rows.map((r) => ({ ...r, photoUrl: r.photo_path ? (urls.get(r.photo_path) ?? null) : null }));
 }
 
-/** Required end date; must not be before the start date. */
-function parseDue(input: unknown, start: string): string {
-  if (input === null || input === undefined || input === '') throw new HttpError(400, 'Please choose an end date');
+/** Optional end date (empty = open-ended); must not be before the start date. */
+function parseDue(input: unknown, start: string): string | null {
+  if (input === null || input === undefined || input === '') return null;
   const due = parseDay(input);
   if (due < start) throw new HttpError(400, 'The end date can’t be before the start date');
   return due;
@@ -244,7 +242,7 @@ tasksRouter.patch(
       if (!cur) throw new HttpError(404, 'Task not found');
       const start = 'day' in req.body ? parseDay(req.body.day) : cur.day;
       patch.day = start;
-      patch.due_date = 'dueDate' in req.body ? parseDue(req.body.dueDate, start) : parseDue(cur.due_date ?? start, start);
+      patch.due_date = 'dueDate' in req.body ? parseDue(req.body.dueDate, start) : parseDue(cur.due_date, start);
     }
     if (Object.keys(patch).length === 0) throw new HttpError(400, 'Nothing to update');
     const { data, error } = await db()
@@ -348,7 +346,7 @@ tasksRouter.get(
     if (kErr) throw kErr;
     if (!kids?.length) throw new HttpError(404, 'Kid not found');
 
-    const [{ data: templates, error: tErr }, { data: checks, error: cErr }, { data: rewards, error: rErr }] = await Promise.all([
+    const [{ data: templates, error: tErr }, { data: checks, error: cErr }, { data: rewards, error: rErr }, { data: removals, error: xErr }] = await Promise.all([
       db()
         .from('kid_task_templates')
         .select('id, title, icon, period, sort_order, member_ids, mandatory, created_at, archived_at')
@@ -362,18 +360,24 @@ tasksRouter.get(
         .lte('day', to),
       // Rewards are per day: only "tasks needed per day" rewards count
       db().from('kid_rewards').select(REWARD_COLS).eq('family_id', me.family_id).eq('kind', 'daily').is('archived_at', null).order('min_score'),
+      db().from('kid_task_removals').select('template_id, member_id, removed_on').in('member_id', kids.map((k) => k.id)),
     ]);
-    if (tErr || cErr || rErr) throw tErr ?? cErr ?? rErr;
+    if (tErr || cErr || rErr || xErr) throw tErr ?? cErr ?? rErr ?? xErr;
     const done = new Set((checks ?? []).map((c) => `${c.member_id}|${c.template_id}|${c.day}`));
     const tickedDays = new Set((checks ?? []).map((c) => `${c.member_id}|${c.day}`));
+    const removedOn = new Map((removals ?? []).map((x) => [`${x.member_id}|${x.template_id}`, x.removed_on as string]));
 
     const result = kids.map((kid) => {
       const kidStart = toDay(new Date(kid.created_at));
-      const mine = (templates as Tpl[]).filter((t) => appliesTo(t, kid.id));
+      // The kid's tasks now, plus tasks taken away from the kid (they still count before that day)
+      const gone = (t: Tpl) => (appliesTo(t, kid.id) ? undefined : removedOn.get(`${kid.id}|${t.id}`));
+      const mine = (templates as Tpl[]).filter((t) => appliesTo(t, kid.id) || gone(t));
       // The kid's full list counts on a day (so 100% = every task, not just the ticked ones) when
       // the task existed then, or when a parent filled in that earlier day by ticking something.
+      // A deleted task, or one taken away from this kid, stops counting from that day on.
       const activeOn = (t: Tpl, day: string) =>
         (!t.archived_at || day < toDay(new Date(t.archived_at))) &&
+        (!gone(t) || day < gone(t)!) &&
         ((day >= toDay(new Date(t.created_at)) && day >= kidStart) || tickedDays.has(`${kid.id}|${day}`));
       const daily = (rewards as RewardRow[]).filter((r) => appliesTo(r, kid.id));
       const dailyEarned = new Map(daily.map((r) => [r.id, 0]));
@@ -434,7 +438,7 @@ tasksRouter.get(
         })),
         tasks: mine
           .filter((t) => perTask.has(t.id))
-          .map((t) => ({ id: t.id, title: t.title, icon: t.icon, period: t.period, archived: Boolean(t.archived_at), ...perTask.get(t.id)! })),
+          .map((t) => ({ id: t.id, title: t.title, icon: t.icon, period: t.period, archived: Boolean(t.archived_at || gone(t)), ...perTask.get(t.id)! })),
         summary: {
           done: totalDone,
           total,

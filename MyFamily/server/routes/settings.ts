@@ -4,6 +4,7 @@ import { memberOf, requireCaller, type Member } from '../auth.js';
 import { db, PHOTO_BUCKET } from '../supabase.js';
 import { handle, HttpError, parseBirthday, requireText } from '../util.js';
 import { REWARD_COLS } from '../rewards.js';
+import { clearRemovals, clientDay, kidsOf, recordRemovals } from '../removals.js';
 import { TEMPLATE_COLS } from './tasks.js';
 
 /** Admin settings: manage family members and the kids task list. Admin (email login) only. */
@@ -209,6 +210,12 @@ settingsRouter.patch(
     if ('memberIds' in (req.body ?? {})) patch.member_ids = await parseKidIds(me.family_id, req.body.memberIds);
     if ('mandatory' in (req.body ?? {})) patch.mandatory = Boolean(req.body.mandatory);
     if (Object.keys(patch).length === 0) throw new HttpError(400, 'Nothing to update');
+    const { data: before } = await db()
+      .from('kid_task_templates')
+      .select('id, member_ids')
+      .eq('id', Number(req.params.id))
+      .eq('family_id', me.family_id)
+      .maybeSingle();
     const { data, error } = await db()
       .from('kid_task_templates')
       .update(patch)
@@ -219,6 +226,13 @@ settingsRouter.patch(
       .maybeSingle();
     if (error) throw error;
     if (!data) throw new HttpError(404, 'Task not found');
+    if (before && 'member_ids' in patch) {
+      // Kids taken off keep their history before today; kids added back count as usual again
+      const oldKids = await kidsOf(me.family_id, before.member_ids);
+      const newKids = await kidsOf(me.family_id, data.member_ids);
+      await recordRemovals(data.id, oldKids.filter((k) => !newKids.includes(k)), clientDay(req.query.day));
+      await clearRemovals(data.id, newKids.filter((k) => !oldKids.includes(k)));
+    }
     res.json({ task: data });
   }),
 );
@@ -331,7 +345,8 @@ settingsRouter.delete(
     const me = requireAdmin(req);
     const { data, error } = await db()
       .from('kid_task_templates')
-      .update({ archived_at: new Date().toISOString() })
+      // Noon UTC of the family's today, so the Dashboard stops counting it from that very day
+      .update({ archived_at: `${clientDay(req.query.day)}T12:00:00.000Z` })
       .eq('id', Number(req.params.id))
       .eq('family_id', me.family_id)
       .is('archived_at', null)

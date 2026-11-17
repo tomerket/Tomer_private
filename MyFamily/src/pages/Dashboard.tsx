@@ -1,12 +1,12 @@
-import { BarChart3, ChevronDown, Gift, X } from 'lucide-react';
+import { BarChart3, ChevronLeft, Gift } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AppLayout } from '../components/AppLayout';
-import { useConfirm } from '../components/ConfirmDialog';
 import { ErrorBox } from '../components/ui';
 import { api, today } from '../lib/api';
 import { useSession } from '../lib/session';
 import { PERIODS, type Period } from '../lib/taskIcons';
-import { SECTION_STYLE, TaskPicture } from './KidsTasks';
+import { TaskPicture } from './KidsTasks';
 import { CheckDropdown } from '../components/CheckDropdown';
 import { rewardIconUrl, rewardRule, type RewardKind } from '../lib/rewardIcons';
 
@@ -50,17 +50,15 @@ const PRESETS = [
 
 export default function Dashboard() {
   const { me } = useSession();
-  const [confirmDialog, confirm] = useConfirm();
   const kids = useMemo(() => (me?.members ?? []).filter((m) => m.role === 'kid'), [me]);
   const colorOf = (id: string) => SERIES[Math.max(0, kids.findIndex((k) => k.id === id)) % SERIES.length];
-  const [selected, setSelected] = useState<string[] | null>(() => (kids[0] ? [kids[0].id] : null)); // null = all kids
+  const [selected, setSelected] = useState<string[] | null>(null); // null = all kids (the default)
   const [range, setRange] = useState('7');
   const t = today();
   const [from, setFrom] = useState(addDays(t, -6));
   const [to, setTo] = useState(t);
   const [stats, setStats] = useState<KidStats[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     if (kids.length === 0) return;
@@ -72,18 +70,7 @@ export default function Dashboard() {
     return () => {
       stale = true;
     };
-  }, [kids.length, selected, from, to, reload]);
-
-
-  async function removeForKid(kidId: string, taskId: number, title: string, name: string) {
-    if (!(await confirm({ title: `Remove "${title}" for ${name}?`, text: "Other kids keep this task." }))) return;
-    try {
-      await api(`/kids/${kidId}/tasks/${taskId}`, { method: 'DELETE' });
-      setReload((n) => n + 1);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
+  }, [kids.length, selected, from, to]);
 
   const agg = stats && {
     done: stats.reduce((a, k) => a + k.summary.done, 0),
@@ -94,7 +81,9 @@ export default function Dashboard() {
 
   return (
     <AppLayout title="Dashboard" icon={<BarChart3 className="text-violet" />}>
-      {confirmDialog}
+      <Link to="/tasks" className="mb-4 inline-flex items-center gap-1 text-xl font-bold text-violet hover:underline">
+        <ChevronLeft size={24} /> Family Tasks
+      </Link>
       {kids.length === 0 ? (
         <p className="py-10 text-center text-xl text-muted">Add kids in Settings to see their statistics.</p>
       ) : (
@@ -171,8 +160,6 @@ export default function Dashboard() {
               <TaskRateChart stats={stats} />
 
               <RewardsTotals stats={stats} colorOf={colorOf} rangeText={rangeText} />
-
-              <TaskPercent stats={stats} colorOf={colorOf} onRemove={removeForKid} rangeText={rangeText} />
             </>
           )}
         </div>
@@ -239,12 +226,22 @@ function Legend({ kids }: { kids: { name: string; color: string }[] }) {
 /** Daily completion %, one line per kid, with a hover crosshair + tooltip. */
 function LineChart({ stats, colorOf, rangeText }: { stats: KidStats[]; colorOf: (id: string) => string; rangeText: string }) {
   const days = stats[0].days.map((d) => d.day);
-  const W = 640, H = 240, L = 40, R = 12, T = 12, B = 28;
+  // Drawn at its real width, so the text stays the same readable size on phones and big screens
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(640);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setWidth(Math.round(e.contentRect.width) || 640));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const W = Math.max(260, width), H = W < 500 ? 200 : 240, L = 40, R = 12, T = 12, B = 28;
   const x = (i: number) => L + (days.length === 1 ? (W - L - R) / 2 : (i * (W - L - R)) / (days.length - 1));
   const y = (p: number) => T + ((100 - p) * (H - T - B)) / 100;
   const [hover, setHover] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
-  const labelEvery = Math.ceil(days.length / 8);
+  const labelEvery = Math.ceil(days.length / Math.max(3, Math.floor((W - L - R) / 56))); // ~56px per date label
 
   function onMove(e: React.PointerEvent) {
     const r = svgRef.current!.getBoundingClientRect();
@@ -259,7 +256,7 @@ function LineChart({ stats, colorOf, rangeText }: { stats: KidStats[]; colorOf: 
         <h3 className="text-xl font-extrabold">Tasks done per day</h3>
         <Range text={rangeText} />
       </div>
-      <div className="relative">
+      <div className="relative" ref={boxRef}>
         <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="w-full touch-none" onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHover(null)} role="img" aria-label="Percent of tasks done per day">
           {[0, 50, 100].map((g) => (
             <g key={g}>
@@ -360,116 +357,6 @@ function PeriodChart({ stats, colorOf, rangeText }: { stats: KidStats[]; colorOf
   );
 }
 
-/**
- * Tasks Breakdown: % done per kid, grouped into Morning / During the day / Evening in their colors.
- * Closed by default (click to open). One table, so every kid's % sits in the same column,
- * with kid names once at the top.
- */
-function TaskPercent({
-  stats,
-  colorOf,
-  onRemove,
-  rangeText,
-}: {
-  stats: KidStats[];
-  colorOf: (id: string) => string;
-  onRemove: (kidId: string, taskId: number, title: string, name: string) => void;
-  rangeText: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const all = new Map<number, KidStats['tasks'][number]>();
-  stats.forEach((k) => k.tasks.forEach((x) => all.has(x.id) || all.set(x.id, x)));
-  return (
-    <section className="overflow-hidden rounded-2xl border-2 border-line">
-      <button
-        className="flex w-full items-center gap-2 px-4 py-3 text-left text-xl font-extrabold hover:bg-soft"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <ChevronDown size={22} className={`transition ${open ? '' : '-rotate-90'}`} />
-        Tasks Breakdown
-        <span className="ml-auto flex items-baseline gap-3 text-base font-semibold text-muted">
-          <Range text={rangeText} />
-          {open ? 'Hide' : 'Show'}
-        </span>
-      </button>
-      {open && (
-        <div className="overflow-x-auto border-t border-line">
-          <table className="w-full table-fixed text-left">
-            <colgroup>
-              <col />
-              {stats.map((k) => (
-                <col key={k.id} className="w-36" />
-              ))}
-            </colgroup>
-            <thead>
-              <tr className="bg-white">
-                <th className="px-4 py-2 font-bold text-muted">Task</th>
-                {stats.map((k) => (
-                  <th key={k.id} className="px-3 py-2 text-right font-extrabold">
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: colorOf(k.id) }} />
-                      {k.name}
-                    </span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            {PERIODS.map((p) => {
-              const list = [...all.values()].filter((x) => x.period === p.key);
-              if (!list.length) return null;
-              const s = SECTION_STYLE[p.key];
-              return (
-                <tbody key={p.key}>
-                  <tr>
-                    <td colSpan={stats.length + 1} className="px-4 py-1.5 text-base font-extrabold" style={{ background: s.bg, color: s.heading }}>
-                      <span className="inline-flex items-center gap-2">
-                        <TaskPicture icon={p.icon} className="h-7 w-7 rounded-full" /> {p.label}
-                      </span>
-                    </td>
-                  </tr>
-                  {list.map((task) => (
-                    <tr key={task.id} className="border-t border-line">
-                      <td className="px-4 py-1.5">
-                        <div className="flex items-center gap-2">
-                          <TaskPicture icon={task.icon} className="h-9 w-9 shrink-0 rounded-lg" />
-                          <span className={`truncate font-semibold ${task.archived ? 'text-muted line-through' : ''}`}>{task.title}</span>
-                        </div>
-                      </td>
-                      {stats.map((k) => {
-                        const st = k.tasks.find((x) => x.id === task.id);
-                        return (
-                          <td key={k.id} className="px-3" title={st ? `${k.name}: done ${st.done} of ${st.total} days` : `${k.name}: not on the list`}>
-                            <div className="flex items-center justify-end gap-1">
-                              <span className="w-14 text-right text-lg font-extrabold tabular-nums text-ink">{st ? `${pct(st.done, st.total)}%` : '–'}</span>
-                              <span className="w-7">
-                                {st && !task.archived && (
-                                  <button
-                                    aria-label={`Remove ${task.title} for ${k.name}`}
-                                    title={`Remove for ${k.name}`}
-                                    className="rounded-md p-1 text-muted hover:bg-soft hover:text-danger"
-                                    onClick={() => onRemove(k.id, task.id, task.title, k.name)}
-                                  >
-                                    <X size={16} />
-                                  </button>
-                                )}
-                              </span>
-                            </div>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              );
-            })}
-          </table>
-        </div>
-      )}
-    </section>
-  );
-}
-
 /** Rewards per kid: on how many days each reward was earned in the chosen dates (once a day at most). */
 function RewardsTotals({ stats, colorOf, rangeText }: { stats: KidStats[]; colorOf: (id: string) => string; rangeText: string }) {
   const all = new Map<string, KidStats['rewards'][number]>();
@@ -487,7 +374,8 @@ function RewardsTotals({ stats, colorOf, rangeText }: { stats: KidStats[]; color
         <p className="px-4 py-4 text-muted">No rewards yet. Add them in Settings.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full table-fixed text-left">
+          {/* On small screens the table keeps its columns readable and scrolls sideways */}
+          <table className="w-full table-fixed text-left" style={{ minWidth: 220 + stats.length * 112 + 96 }}>
             <colgroup>
               <col />
               {stats.map((k) => (
