@@ -9,14 +9,12 @@ type NavItem = { to: string; label: string; icon: LucideIcon; end?: boolean; sho
 const NAV: NavItem[] = [
   { to: '/', label: 'Home', icon: Home, end: true, show: 'all' },
   { to: '/tasks', label: 'Family Tasks', icon: ClipboardCheck, show: 'all' },
+  { to: '/calendar', label: 'Calendar', icon: CalendarDays, show: 'all' },
+  { to: '/shopping', label: 'Shopping List', icon: ShoppingCart, show: 'all' },
   { to: '/dashboard', label: 'Dashboard', icon: BarChart3, show: 'parent' },
   { to: '/settings', label: 'Settings', icon: Settings, show: 'admin' },
 ];
-const SOON = [
-  { label: 'Calendar', icon: CalendarDays },
-  { label: 'Shopping List', icon: ShoppingCart },
-  { label: 'Food menu', icon: UtensilsCrossed },
-];
+const SOON = [{ label: 'Food menu', icon: UtensilsCrossed }];
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { me, logout } = useSession();

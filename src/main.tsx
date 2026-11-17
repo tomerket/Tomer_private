@@ -5,7 +5,9 @@ import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Spinner } from './components/ui';
 import { SessionProvider, useSession } from './lib/session';
+import Calendar from './pages/Calendar';
 import Dashboard from './pages/Dashboard';
+import Shopping from './pages/Shopping';
 import DesignTile from './pages/DesignTile';
 import FamilyTasks from './pages/FamilyTasks';
 import Settings from './pages/Settings';
@@ -59,7 +61,9 @@ function App() {
       <Route path="/tasks" element={<Private><FamilyTasks /></Private>} />
       <Route path="/tasks/kids" element={<Private><KidsTasks /></Private>} />
       <Route path="/tasks/parents" element={<Role need="parent"><ParentsTasks /></Role>} />
-      <Route path="/dashboard" element={<Role need="parent"><Dashboard /></Role>} />
+      <Route path="/calendar" element={<Private><Calendar /></Private>} />
+      <Route path="/shopping" element={<Private><Shopping /></Private>} />
+      <Route path="/dashboard"element={<Role need="parent"><Dashboard /></Role>} />
       <Route path="/settings" element={<Role need="admin"><Settings /></Role>} />
       <Route path="/design" element={<DesignTile />} />
       <Route path="*" element={<Navigate to="/" replace />} />
