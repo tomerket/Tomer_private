@@ -264,6 +264,7 @@ tasksRouter.delete(
     const me = requireParent(req);
     const { data: gone, error } = await db().from('parent_tasks').delete().eq('id', req.params.id).eq('family_id', me.family_id).select('photo_path');
     if (error) throw error;
+    if (!gone?.length) throw new HttpError(404, 'Task not found'); // not in your family (nothing was deleted)
     const paths = (gone ?? []).map((g) => g.photo_path).filter(Boolean) as string[];
     if (paths.length) await db().storage.from(PHOTO_BUCKET).remove(paths);
     res.json({ ok: true });
