@@ -112,7 +112,7 @@ export default function ParentsTasks() {
   const nameOf = (id: string | null) => members.find((p) => p.id === id)?.name;
   const todayIso = today();
 
-  const [filter, setFilter] = useState<Filter>('today');
+  const [filter, setFilter] = useState<Filter>('open'); // All open by default
   const [who, setWho] = useState<string[] | null>(null); // null = everyone
   const [tasks, setTasks] = useState<ParentTask[] | null>(null);
   const [subject, setSubject] = useState('');
