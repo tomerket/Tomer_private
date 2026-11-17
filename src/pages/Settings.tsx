@@ -569,22 +569,17 @@ const draftFrom = (r: Reward): RewardDraft => ({
   taskId: r.task_id ? String(r.task_id) : '',
   streakDays: r.streak_days ?? 5,
 });
-/** No task chosen = "tasks per day" reward; a task chosen = "that task, days in a row" reward. */
-const draftBody = (d: RewardDraft) =>
-  d.taskId
-    ? { kind: 'streak', title: d.title, icon: d.icon, taskId: Number(d.taskId), streakDays: d.streakDays, memberIds: d.kids ?? 'all' }
-    : { kind: 'daily', title: d.title, icon: d.icon, minScore: d.score, memberIds: d.kids ?? 'all' };
+/** Every reward is earned with a number of tasks per day. */
+const draftBody = (d: RewardDraft) => ({ kind: 'daily', title: d.title, icon: d.icon, minScore: d.score, memberIds: d.kids ?? 'all' });
 
 /** The reward form, used to add a reward (top of the page) and to change one (inside its row). */
 function RewardForm({
   initial,
-  tasks,
   submitLabel,
   onSubmit,
   onCancel,
 }: {
   initial: RewardDraft;
-  tasks: Template[];
   submitLabel: string;
   onSubmit: (d: RewardDraft) => Promise<void>;
   onCancel?: () => void;
@@ -592,9 +587,22 @@ function RewardForm({
   const [d, setD] = useState(initial);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const set = (patch: Partial<RewardDraft>) => setD((x) => ({ ...x, ...patch }));
-  // Days-in-a-row rewards are for extra tasks, so must-do tasks are left out
-  const streakTasks = tasks.filter((t) => !t.mandatory || String(t.id) === d.taskId);
+
+  /** Own picture from the phone/computer (or the camera), cropped square, used as the reward picture. */
+  async function uploadOwn(file: File) {
+    setError(null);
+    setUploading(true);
+    try {
+      const { url } = await api<{ url: string }>('/settings/task-image', { raw: await squareImage(file) });
+      set({ icon: url });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -615,42 +623,25 @@ function RewardForm({
       <Field label="Reward">
         <input className="input" placeholder="e.g. 30 minutes of screen time" maxLength={80} value={d.title} onChange={(e) => set({ title: e.target.value })} />
       </Field>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Field label="Task (optional)">
-          <select className="input" value={d.taskId} onChange={(e) => set({ taskId: e.target.value })}>
-            <option value="">No specific task</option>
-            {streakTasks.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.title}
-              </option>
-            ))}
-          </select>
-        </Field>
-        {d.taskId ? (
-          <Field label="Days in a row">
-            <input
-              className="input"
-              type="number"
-              min={2}
-              max={60}
-              value={d.streakDays}
-              onChange={(e) => set({ streakDays: Math.max(2, Math.min(60, Number(e.target.value) || 2)) })}
-            />
-          </Field>
-        ) : (
-          <Field label="Tasks needed per day">
-            <input className="input" type="number" min={1} max={100} value={d.score} onChange={(e) => set({ score: Math.max(1, Math.min(100, Number(e.target.value) || 1)) })} />
-          </Field>
-        )}
-      </div>
-      <p className="-mt-2 text-sm text-muted">
-        {d.taskId
-          ? 'Earned when this task is done this many days in a row.'
-          : 'Earned on a day with at least this many tasks done, including all must-do tasks.'}
-      </p>
+      <Field label="Tasks needed per day">
+        <input
+          className="input sm:w-48"
+          type="number"
+          min={1}
+          max={100}
+          value={d.score}
+          onChange={(e) => set({ score: Math.max(1, Math.min(100, Number(e.target.value) || 1)) })}
+        />
+      </Field>
+      <p className="-mt-2 text-sm text-muted">Earned on a day with at least this many tasks done, including all must-do tasks.</p>
 
       <div>
         <span className="label">Picture</span>
+        <div className="mb-2 flex flex-wrap items-center gap-3">
+          <PhotoSourceButton label="Your own picture" disabled={uploading} onPick={uploadOwn} />
+          <span className="text-muted">{uploading ? 'Uploading…' : 'Your own picture, or pick one below'}</span>
+          {d.icon.startsWith('https://') && <img src={d.icon} alt="Your picture" className="h-12 w-12 rounded-xl object-cover ring-2 ring-violet" />}
+        </div>
         <div className="grid grid-cols-5 gap-2 rounded-2xl bg-white p-2 sm:grid-cols-10">
           {REWARD_ICONS.map((i) => (
             <button
@@ -737,7 +728,7 @@ function RewardsSettings() {
       {confirmDialog}
       <div className="rounded-2xl bg-soft p-4 sm:p-5">
         <div className="mb-3 text-lg font-extrabold text-violet">Add a new reward</div>
-        <RewardForm key={formKey} initial={emptyDraft()} tasks={tasks} submitLabel="Add reward" onSubmit={add} />
+        <RewardForm key={formKey} initial={emptyDraft()} submitLabel="Add reward" onSubmit={add} />
       </div>
 
       <section>
@@ -774,7 +765,7 @@ function RewardsSettings() {
                 </div>
                 {editingId === r.id && (
                   <div className="mt-3 border-t border-line pt-3">
-                    <RewardForm initial={draftFrom(r)} tasks={tasks} submitLabel="Save changes" onSubmit={(d) => save(r.id, d)} onCancel={() => setEditingId(null)} />
+                    <RewardForm initial={draftFrom(r)} submitLabel="Save changes" onSubmit={(d) => save(r.id, d)} onCancel={() => setEditingId(null)} />
                   </div>
                 )}
               </li>

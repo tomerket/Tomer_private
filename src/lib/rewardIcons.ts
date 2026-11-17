@@ -23,7 +23,8 @@ export const REWARD_ICONS: { key: string; label: string }[] = [
 ];
 
 const KEYS = new Set(REWARD_ICONS.map((i) => i.key));
-export const rewardIconUrl = (key: string | null | undefined) => `/reward-icons/${key && KEYS.has(key) ? key : 'gift'}.png`;
+export const rewardIconUrl = (key: string | null | undefined) =>
+  key?.startsWith('https://') ? key : `/reward-icons/${key && KEYS.has(key) ? key : 'gift'}.png`; // own photo, or a built-in picture
 
 export type RewardKind = 'daily' | 'streak';
 

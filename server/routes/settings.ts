@@ -244,7 +244,8 @@ settingsRouter.get(
 async function rewardRow(familyId: string, body: Record<string, unknown> | undefined): Promise<Record<string, unknown>> {
   const title = requireText(body?.title, 'Reward', 80);
   const icon = String(body?.icon ?? 'gift');
-  if (!/^[a-z0-9-]{1,30}$/.test(icon)) throw new HttpError(400, 'Choose a picture');
+  // A built-in picture, or a photo this family uploaded
+  if (!/^[a-z0-9-]{1,30}$/.test(icon) && !icon.startsWith(taskImagePrefix(familyId))) throw new HttpError(400, 'Choose a picture');
   const member_ids = await parseKidIds(familyId, body?.memberIds);
   const kind = body?.kind === 'streak' ? 'streak' : 'daily';
   const row: Record<string, unknown> = { title, icon, kind, member_ids, min_score: null, task_id: null, streak_days: null };
