@@ -418,10 +418,10 @@ function TaskItem({
         aria-label={task.done ? 'Mark as not done' : 'Mark as done'}
         disabled={!canEdit}
         onClick={onToggle}
-        className="stamp mt-1 h-12 w-12"
+        className="stamp stamp-bold mt-1 h-12 w-12"
         data-on={task.done}
       >
-        {task.done && <Check size={24} strokeWidth={4} className="text-white" />}
+        {task.done && <Check size={28} strokeWidth={5} className="text-white" />}
       </button>
 
       <div className="min-w-0 flex-1">
