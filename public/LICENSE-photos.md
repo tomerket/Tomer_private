@@ -36,7 +36,7 @@ Task photos live in `task-photos/`, the sample family photo is `default-family.j
 | teddy | [Teddy bear family](https://www.flickr.com/photos/151415985@N06/37388489996) | cc0 | Wallboat |
 | palette | [Color brushes](https://www.flickr.com/photos/148714304@N03/36910578426) | cc0 | ky0nch3ng |
 | bike | [The Red Bicycle.](https://www.flickr.com/photos/88123769@N02/15655615295) | cc0 | Bernard Spragg |
-| default-family | [File:Family watching beach sunset (Unsplash).jpg](https://commons.wikimedia.org/wiki/File:Family_watching_beach_sunset_(Unsplash).jpg) | CC0 | David Straight davidstraight |
+| default-family | Cartoon family picture supplied by the family (app owner) | Owner supplied | |
 | backpack | [File:Wenger backpack.jpg](https://commons.wikimedia.org/wiki/File:Wenger_backpack.jpg) | CC0 | Sir Tragedy |
 | moon | [File:Full moon in Sagittarius-cropped.jpg](https://commons.wikimedia.org/wiki/File:Full_moon_in_Sagittarius-cropped.jpg) | CC0 | José Lodos Benavente |
 | pencil | [File:Taking notes with a pencil (Unsplash).jpg](https://commons.wikimedia.org/wiki/File:Taking_notes_with_a_pencil_(Unsplash).jpg) | CC0 | Thought Catalog thoughtcatalog |

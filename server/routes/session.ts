@@ -69,19 +69,25 @@ sessionRouter.post(
   '/member-login',
   handle(async (req, res) => {
     const familyName = requireText(req.body?.familyName, 'Family name', 60);
-    const adminName = requireText(req.body?.adminName, 'Admin name', 60);
+    // "Parent": the name of any parent in the family (tells apart families with the same family name)
+    const parentName = requireText(req.body?.parentName ?? req.body?.adminName, 'Parent', 60);
     const name = requireText(req.body?.name, 'Name', 40);
     const birthday = parseBirthday(req.body?.birthday);
     const noMatch = new HttpError(401, "We couldn't find a family member with those details");
 
-    const { data: families, error } = await db()
-      .from('families')
-      .select('id')
-      .ilike('family_name', exact(familyName))
-      .ilike('admin_name', exact(adminName))
-      .limit(1);
+    const { data: families, error } = await db().from('families').select('id').ilike('family_name', exact(familyName));
     if (error) throw error;
-    const family = families?.[0];
+    let family: { id: string } | undefined;
+    if (families?.length) {
+      const { data: parents } = await db()
+        .from('members')
+        .select('family_id')
+        .in('family_id', families.map((f) => f.id))
+        .eq('role', 'parent')
+        .ilike('name', exact(parentName))
+        .limit(1);
+      family = parents?.[0] ? { id: parents[0].family_id } : undefined;
+    }
     if (!family) throw noMatch;
 
     const since = new Date(Date.now() - FAILURE_WINDOW_MIN * 60_000).toISOString();

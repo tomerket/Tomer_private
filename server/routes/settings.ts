@@ -176,7 +176,7 @@ settingsRouter.post(
       .limit(1);
     const { data, error } = await db()
       .from('kid_task_templates')
-      .insert({ family_id: me.family_id, title, period, icon, member_ids, sort_order: (last?.[0]?.sort_order ?? 0) + 1 })
+      .insert({ family_id: me.family_id, title, period, icon, member_ids, mandatory: Boolean(req.body?.mandatory), sort_order: (last?.[0]?.sort_order ?? 0) + 1 })
       .select(TEMPLATE_COLS)
       .single();
     if (error) throw error;
@@ -200,15 +200,18 @@ settingsRouter.put(
   }),
 );
 
-/** Change which kids a task is for. */
+/** Change which kids a task is for, and/or whether it is a must-do task. */
 settingsRouter.patch(
   '/settings/kid-tasks/:id',
   handle(async (req, res) => {
     const me = requireAdmin(req);
-    const member_ids = await parseKidIds(me.family_id, req.body?.memberIds);
+    const patch: Record<string, unknown> = {};
+    if ('memberIds' in (req.body ?? {})) patch.member_ids = await parseKidIds(me.family_id, req.body.memberIds);
+    if ('mandatory' in (req.body ?? {})) patch.mandatory = Boolean(req.body.mandatory);
+    if (Object.keys(patch).length === 0) throw new HttpError(400, 'Nothing to update');
     const { data, error } = await db()
       .from('kid_task_templates')
-      .update({ member_ids })
+      .update(patch)
       .eq('id', Number(req.params.id))
       .eq('family_id', me.family_id)
       .is('archived_at', null)
@@ -237,42 +240,68 @@ settingsRouter.get(
   }),
 );
 
+/** Checks a reward form (used for adding and for editing). */
+async function rewardRow(familyId: string, body: Record<string, unknown> | undefined): Promise<Record<string, unknown>> {
+  const title = requireText(body?.title, 'Reward', 80);
+  const icon = String(body?.icon ?? 'gift');
+  if (!/^[a-z0-9-]{1,30}$/.test(icon)) throw new HttpError(400, 'Choose a picture');
+  const member_ids = await parseKidIds(familyId, body?.memberIds);
+  const kind = body?.kind === 'streak' ? 'streak' : 'daily';
+  const row: Record<string, unknown> = { title, icon, kind, member_ids, min_score: null, task_id: null, streak_days: null };
+  if (kind === 'daily') {
+    const min_score = Number(body?.minScore);
+    if (!Number.isInteger(min_score) || min_score < 1 || min_score > 100) throw new HttpError(400, 'Tasks per day must be a whole number from 1');
+    row.min_score = min_score;
+  } else {
+    // One task done several days in a row
+    const streak_days = Number(body?.streakDays);
+    if (!Number.isInteger(streak_days) || streak_days < 2 || streak_days > 60) throw new HttpError(400, 'Days in a row must be between 2 and 60');
+    const { data: task } = await db()
+      .from('kid_task_templates')
+      .select('id')
+      .eq('id', Number(body?.taskId))
+      .eq('family_id', familyId)
+      .is('archived_at', null)
+      .maybeSingle();
+    if (!task) throw new HttpError(400, 'Choose the task');
+    row.task_id = task.id;
+    row.streak_days = streak_days;
+  }
+  return row;
+}
+
 settingsRouter.post(
   '/settings/rewards',
   handle(async (req, res) => {
     const me = requireAdmin(req);
-    const title = requireText(req.body?.title, 'Reward', 80);
-    const icon = String(req.body?.icon ?? 'gift');
-    if (!/^[a-z0-9-]{1,30}$/.test(icon)) throw new HttpError(400, 'Choose a picture');
-    const member_ids = await parseKidIds(me.family_id, req.body?.memberIds);
-    const kind = req.body?.kind === 'streak' ? 'streak' : 'daily';
-    const row: Record<string, unknown> = { family_id: me.family_id, title, icon, kind, member_ids };
-    if (kind === 'daily') {
-      const min_score = Number(req.body?.minScore);
-      if (!Number.isInteger(min_score) || min_score < 1 || min_score > 100) throw new HttpError(400, 'Tasks per day must be a whole number from 1');
-      row.min_score = min_score;
-    } else {
-      // One task done several days in a row
-      const streak_days = Number(req.body?.streakDays);
-      if (!Number.isInteger(streak_days) || streak_days < 2 || streak_days > 60) throw new HttpError(400, 'Days in a row must be between 2 and 60');
-      const { data: task } = await db()
-        .from('kid_task_templates')
-        .select('id')
-        .eq('id', Number(req.body?.taskId))
-        .eq('family_id', me.family_id)
-        .is('archived_at', null)
-        .maybeSingle();
-      if (!task) throw new HttpError(400, 'Choose the task');
-      row.task_id = task.id;
-      row.streak_days = streak_days;
-    }
+    const row = await rewardRow(me.family_id, req.body);
     const { data, error } = await db()
       .from('kid_rewards')
-      .insert(row)
+      .insert({ ...row, family_id: me.family_id })
       .select(REWARD_COLS)
       .single();
     if (error) throw error;
     res.status(201).json({ reward: data });
+  }),
+);
+
+/** Change an existing reward (name, picture, rule, kids). */
+settingsRouter.patch(
+  '/settings/rewards/:id',
+  handle(async (req, res) => {
+    const me = requireAdmin(req);
+    const row = await rewardRow(me.family_id, req.body);
+    const { data, error } = await db()
+      .from('kid_rewards')
+      .update(row)
+      .eq('id', req.params.id)
+      .eq('family_id', me.family_id)
+      .is('archived_at', null)
+      .select(REWARD_COLS)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new HttpError(404, 'Reward not found');
+    res.json({ reward: data });
   }),
 );
 
