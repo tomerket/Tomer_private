@@ -1,6 +1,7 @@
 import { BarChart3, ChevronDown, Gift, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppLayout } from '../components/AppLayout';
+import { useConfirm } from '../components/ConfirmDialog';
 import { ErrorBox } from '../components/ui';
 import { api, today } from '../lib/api';
 import { useSession } from '../lib/session';
@@ -50,6 +51,7 @@ const PRESETS = [
 
 export default function Dashboard() {
   const { me } = useSession();
+  const [confirmDialog, confirm] = useConfirm();
   const kids = useMemo(() => (me?.members ?? []).filter((m) => m.role === 'kid'), [me]);
   const colorOf = (id: string) => SERIES[Math.max(0, kids.findIndex((k) => k.id === id)) % SERIES.length];
   const [selected, setSelected] = useState<string[] | null>(() => (kids[0] ? [kids[0].id] : null)); // null = all kids
@@ -75,7 +77,7 @@ export default function Dashboard() {
 
 
   async function removeForKid(kidId: string, taskId: number, title: string, name: string) {
-    if (!window.confirm(`Remove "${title}" for ${name}? Other kids keep it.`)) return;
+    if (!(await confirm({ title: `Remove "${title}" for ${name}?`, text: "Other kids keep this task." }))) return;
     try {
       await api(`/kids/${kidId}/tasks/${taskId}`, { method: 'DELETE' });
       setReload((n) => n + 1);
@@ -94,6 +96,7 @@ export default function Dashboard() {
 
   return (
     <AppLayout title="Dashboard" icon={<BarChart3 className="text-violet" />}>
+      {confirmDialog}
       {kids.length === 0 ? (
         <p className="py-10 text-center text-xl text-muted">Add kids in Settings to see their statistics.</p>
       ) : (
