@@ -33,6 +33,26 @@ body,
   min-height: 100%;
 }
 
+/*
+ * Bigger monitors: scale the whole interface (text, buttons, spacing are all in rem).
+ * Phones, tablets and laptops (up to ~1600px) keep the normal size.
+ */
+@media (min-width: 1700px) and (min-height: 900px) {
+  html {
+    font-size: 112.5%;
+  }
+}
+@media (min-width: 2100px) and (min-height: 1100px) {
+  html {
+    font-size: 131.25%;
+  }
+}
+@media (min-width: 2800px) and (min-height: 1500px) {
+  html {
+    font-size: 150%;
+  }
+}
+
 body {
   margin: 0;
   color: var(--color-ink);

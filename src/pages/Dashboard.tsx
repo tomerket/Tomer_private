@@ -237,7 +237,10 @@ function LineChart({ stats, colorOf, rangeText }: { stats: KidStats[]; colorOf: 
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const W = Math.max(260, width), H = W < 500 ? 200 : 240, L = 40, R = 12, T = 12, B = 28;
+  // Chart text follows the page text size (bigger on big monitors)
+  const scale = typeof window === "undefined" ? 1 : parseFloat(getComputedStyle(document.documentElement).fontSize) / 16 || 1;
+  const fs = Math.round(12 * scale);
+  const W = Math.max(260, width), H = Math.round((W < 500 ? 200 : 240) * scale), L = Math.round(40 * scale), R = Math.round(20 * scale), T = 12, B = Math.round(28 * scale);
   const x = (i: number) => L + (days.length === 1 ? (W - L - R) / 2 : (i * (W - L - R)) / (days.length - 1));
   const y = (p: number) => T + ((100 - p) * (H - T - B)) / 100;
   const [hover, setHover] = useState<number | null>(null);
@@ -262,14 +265,14 @@ function LineChart({ stats, colorOf, rangeText }: { stats: KidStats[]; colorOf: 
           {[0, 50, 100].map((g) => (
             <g key={g}>
               <line x1={L} x2={W - R} y1={y(g)} y2={y(g)} stroke="#e7e4f0" />
-              <text x={L - 6} y={y(g) + 4} textAnchor="end" fontSize="12" fill="#6b6880">
+              <text x={L - 6} y={y(g) + 4} textAnchor="end" fontSize={fs} fill="#6b6880">
                 {g}%
               </text>
             </g>
           ))}
           {days.map((d, i) =>
             i % labelEvery === 0 ? (
-              <text key={d} x={x(i)} y={H - 8} textAnchor="middle" fontSize="12" fill="#6b6880">
+              <text key={d} x={x(i)} y={H - 8} textAnchor="middle" fontSize={fs} fill="#6b6880">
                 {md(d)}
               </text>
             ) : null,
@@ -365,7 +368,8 @@ function RewardsTotals({ stats, colorOf, rangeText }: { stats: KidStats[]; color
   const rows = [...all.values()];
   const isPhone = useIsPhone();
   // Phones: narrow columns so more kids fit side by side; kid names may wrap under their dot
-  const col = isPhone ? { reward: 96, kid: 54, total: 44 } : { reward: 220, kid: 112, total: 96 };
+  // Widths in rem so the table grows with the text on big monitors
+  const col = isPhone ? { reward: 6, kid: 3.375, total: 2.75 } : { reward: 13.75, kid: 7, total: 6 };
   return (
     <section className="overflow-hidden rounded-2xl border-2 border-sun/40">
       <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 bg-sun-soft px-3 py-2.5 sm:px-4 sm:py-3">
@@ -380,13 +384,13 @@ function RewardsTotals({ stats, colorOf, rangeText }: { stats: KidStats[]; color
       ) : (
         <div className="overflow-x-auto">
           {/* If there are still too many kids, the table scrolls sideways inside its box */}
-          <table className="w-full table-fixed text-left" style={{ minWidth: col.reward + stats.length * col.kid + col.total }}>
+          <table className="w-full table-fixed text-left" style={{ minWidth: `${col.reward + stats.length * col.kid + col.total}rem` }}>
             <colgroup>
               <col />
               {stats.map((k) => (
-                <col key={k.id} style={{ width: col.kid }} />
+                <col key={k.id} style={{ width: `${col.kid}rem` }} />
               ))}
-              <col style={{ width: col.total }} />
+              <col style={{ width: `${col.total}rem` }} />
             </colgroup>
             <thead>
               <tr className="text-xs sm:text-sm">
