@@ -188,7 +188,7 @@ tasksRouter.get(
     const me = requireParent(req);
     let q = db().from('parent_tasks').select(PT_COLS).eq('family_id', me.family_id);
     if (req.query.filter === 'done') {
-      const { data, error } = await q.eq('done', true).order('done_at', { ascending: false, nullsFirst: false }).limit(200);
+      const { data, error } = await q.eq('done', true).order('done_at', { ascending: false, nullsFirst: false }).limit(MAX_DONE_TASKS);
       if (error) throw error;
       return void res.json({ tasks: await withPhotoUrls(data ?? []) });
     }
@@ -223,6 +223,23 @@ tasksRouter.post(
     res.status(201).json({ task: { ...data, photoUrl: null } });
   }),
 );
+
+/** The Done list keeps the newest 15 finished tasks; older ones (and their photos) are deleted. */
+export const MAX_DONE_TASKS = 15;
+async function pruneDone(familyId: string) {
+  const { data: old } = await db()
+    .from('parent_tasks')
+    .select('id, photo_path')
+    .eq('family_id', familyId)
+    .eq('done', true)
+    .order('done_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
+    .range(MAX_DONE_TASKS, MAX_DONE_TASKS + 500);
+  if (!old?.length) return;
+  await db().from('parent_tasks').delete().eq('family_id', familyId).in('id', old.map((o) => o.id));
+  const paths = old.map((o) => o.photo_path).filter(Boolean) as string[];
+  if (paths.length) await db().storage.from(PHOTO_BUCKET).remove(paths);
+}
 
 tasksRouter.patch(
   '/parent-tasks/:id',
@@ -262,6 +279,7 @@ tasksRouter.patch(
       .maybeSingle();
     if (error) throw error;
     if (!data) throw new HttpError(404, 'Task not found');
+    if (patch.done === true) await pruneDone(me.family_id);
     res.json({ task: (await withPhotoUrls([data]))[0] });
   }),
 );

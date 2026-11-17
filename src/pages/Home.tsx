@@ -43,7 +43,7 @@ const DEFAULT_PHOTO = '/default-family.jpg';
 
 export default function Home() {
   const { me, refresh } = useSession();
-  const { isAdmin } = useRoles();
+  const { isParent } = useRoles(); // every parent (admin or not) may change the family photo
   const [busy, setBusy] = useState(false);
   const [confirmDialog, confirm] = useConfirm();
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +92,7 @@ export default function Home() {
             <p className="text-xl font-semibold text-muted sm:text-2xl">Hi {me.member?.name}!</p>
             <h1 className="text-4xl font-extrabold leading-none tracking-wide sm:text-6xl">The {me.family.family_name} Family</h1>
           </div>
-          {isAdmin && (
+          {isParent && (
             <div className="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
               <label className="btn btn-primary cursor-pointer px-3 py-2 shadow">
                 <Camera size={20} />
@@ -119,7 +119,7 @@ export default function Home() {
           />
           {!hasPhoto && (
             <span className="absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-3 py-1 text-sm font-semibold text-muted shadow">
-              {isAdmin ? 'Sample photo. Add your own family photo above.' : 'Sample photo'}
+              {isParent ? 'Sample photo. Add your own family photo above.' : 'Sample photo'}
             </span>
           )}
         </div>

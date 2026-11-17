@@ -343,6 +343,12 @@ export default function ParentsTasks() {
 
         <ErrorBox message={error} />
 
+        {filter === 'done' && (
+          <p className="mb-3 rounded-2xl bg-sun-soft px-4 py-2.5 text-base font-semibold text-sun-ink">
+            Only the last 15 done tasks are kept. When a 16th task is done, the oldest one is deleted automatically.
+          </p>
+        )}
+
         {!tasks ? (
           !error && <div className="py-10 text-center text-muted">Loading…</div>
         ) : visible.length === 0 ? (
