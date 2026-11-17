@@ -173,7 +173,7 @@ export default function KidsTasks() {
           >
             <ChevronLeft size={24} />
           </button>
-          <span className="min-w-[160px] text-center text-lg font-extrabold">{dayLabel(day, todayIso)}</span>
+          <span className="min-w-[10rem] text-center text-lg font-extrabold">{dayLabel(day, todayIso)}</span>
           <button
             aria-label="Next day"
             className="rounded-lg p-2 text-violet transition hover:bg-white disabled:opacity-30"
@@ -317,7 +317,7 @@ export default function KidsTasks() {
                         {sDone}/{list.length}
                       </span>
                     </h2>
-                    <div className="flex flex-1 gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] sm:overflow-visible sm:pb-0">
+                    <div className="flex flex-1 gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] sm:overflow-visible sm:pb-0">
                       {list.map((t) => (
                         <button
                           key={t.id}
