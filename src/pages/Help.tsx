@@ -128,7 +128,7 @@ const SECTIONS: Section[] = [
             <b>Share with</b>: <i>Only me</i> (the default), <i>All family</i>, or <i>Choose people</i>. Each activity shows who it is shared
             with. Only the person who added it can change this.
           </li>
-          <li>Everyone can add. Parents can change or delete anything shared with them; kids only what they added.</li>
+          <li>Everyone can add. Anyone an activity is shared with can change or delete it; only the person who added it chooses who it is shared with.</li>
         </ul>
       </>
     ),
@@ -143,12 +143,12 @@ const SECTIONS: Section[] = [
         <ul>
           <li>Each category is a column with its own color. When they don't all fit, a notice and arrows help you scroll to the rest.</li>
           <li>Tap a product after buying it to cross it out; tap again to put it back.</li>
-          <li>Delete one product with its bin. Parents can also remove all bought products, empty a category, or delete the whole list.</li>
+          <li>Delete one product with its bin, remove all bought products, empty a category, or delete the whole list. Each only touches products shared with you.</li>
           <li>
             <b>Share with</b>: <i>Only me</i> (the default), <i>All family</i>, or chosen people. Products still to buy show who they are
             shared with, for example <i>All Family</i> or <i>Dana, Omer</i>.
           </li>
-          <li>Kids can delete only what they added.</li>
+          <li>Anyone a product is shared with can tick it, change it or delete it.</li>
         </ul>
       </>
     ),

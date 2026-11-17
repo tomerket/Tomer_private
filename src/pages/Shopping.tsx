@@ -38,7 +38,8 @@ export default function Shopping() {
   const categoryRef = useRef<HTMLSelectElement>(null);
   const productRef = useRef<HTMLTextAreaElement>(null);
   const isParent = me?.member?.role === 'parent';
-  const canRemove = (i: Item) => isParent || i.created_by === me?.member?.id;
+  // Everything you can see was added by you or shared with you, so you can remove it
+  const canRemove = (_i: Item) => true;
 
   useEffect(() => {
     api<{ items: Item[] }>('/shopping')
@@ -232,7 +233,7 @@ export default function Shopping() {
             <span className="text-sm font-bold text-muted sm:text-lg">
               {items.length === 0 ? 'The list is empty. Add the first product above.' : `${items.length - boughtCount} to buy${boughtCount > 0 ? `, ${boughtCount} bought` : ''}`}
             </span>
-            {isParent && items.length > 0 && (
+            {items.length > 0 && (
               <div className="ml-auto flex flex-nowrap gap-1.5 whitespace-nowrap sm:gap-2">
                 {boughtCount > 0 && (
                   <button className={SMALL_BTN} onClick={() => clearBought()}>
@@ -258,12 +259,12 @@ export default function Shopping() {
                   <div className="flex flex-wrap items-center gap-x-1 px-2 py-1.5 sm:flex-nowrap sm:px-3 sm:py-2.5" style={{ background: c.bg, color: c.fg }}>
                     <h2 className="w-full min-w-0 break-words text-sm font-extrabold leading-tight sm:w-auto sm:flex-1 sm:text-xl">{col.name}</h2>
                     <span className="shrink-0 text-[11px] font-bold sm:text-sm">{col.items.length === 0 ? '' : left === 0 ? 'All bought' : `${left} left`}</span>
-                    {isParent && anyBought && (
+                    {anyBought && (
                       <button className="hidden rounded-lg p-1 hover:bg-white/60 sm:inline-flex" title={`Remove bought from ${col.name}`} aria-label={`Remove bought from ${col.name}`} onClick={() => clearBought(col.name)}>
                         <Check size={18} />
                       </button>
                     )}
-                    {isParent && col.items.length > 0 && (
+                    {col.items.length > 0 && (
                       <button className="hidden rounded-lg p-1 hover:bg-white/60 sm:inline-flex" title={`Empty ${col.name}`} aria-label={`Empty the ${col.name} list`} onClick={() => clearAll(col.name)}>
                         <Trash2 size={18} />
                       </button>

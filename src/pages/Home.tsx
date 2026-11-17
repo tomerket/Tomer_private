@@ -81,7 +81,11 @@ export default function Home() {
   return (
     <AppLayout title="Home" flush>
       {confirmDialog}
-      <div className="flex flex-1 flex-col px-4 pb-4 pt-4 sm:px-8 sm:pt-6">
+      <div className="relative flex flex-1 flex-col px-4 pb-4 pt-4 sm:px-8 sm:pt-6">
+        {/* App version, small, top right: "v1.0" from package.json 1.0.0 */}
+        <span className="absolute right-3 top-1 text-[11px] font-semibold text-muted/70 sm:right-4 sm:top-1.5" title={`MyFamily version ${__APP_VERSION__}`}>
+          v{__APP_VERSION__.split('.').slice(0, 2).join('.')}
+        </span>
         {/* Title */}
         <div className="flex items-start gap-3">
           <div className="min-w-0">

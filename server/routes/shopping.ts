@@ -10,7 +10,7 @@ shoppingRouter.use('/shopping', requireCaller);
 const COLS = 'id, category, name, bought, bought_at, shared_with, created_by, created_at';
 const MAX_ITEMS_PER_ADD = 30;
 
-/** A product this member can see (otherwise 404). Parents can remove anything they see; kids only what they added. */
+/** A product this member can see (otherwise 404). Anyone it is shared with can tick, change or remove it. */
 async function itemFor(req: Request): Promise<{ me: Member; item: { id: string; created_by: string | null; shared_with: string[] | null } }> {
   const me = memberOf(req);
   const { data } = await db()
@@ -66,11 +66,8 @@ shoppingRouter.patch(
       patch.bought = Boolean(b.bought);
       patch.bought_at = patch.bought ? new Date().toISOString() : null;
     }
-    if ('name' in b || 'category' in b) {
-      if (me.role !== 'parent' && item.created_by !== me.id) throw new HttpError(403, 'You can only change what you added');
-      if ('name' in b) patch.name = requireText(b.name, 'Product', 80);
-      if ('category' in b) patch.category = requireText(b.category, 'Category', 40);
-    }
+    if ('name' in b) patch.name = requireText(b.name, 'Product', 80);
+    if ('category' in b) patch.category = requireText(b.category, 'Category', 40);
     if ('sharedWith' in b) {
       if (item.created_by !== me.id) throw new HttpError(403, 'Only the person who added it can change who it is shared with');
       patch.shared_with = await parseSharedWith(b.sharedWith, me);
@@ -86,7 +83,6 @@ shoppingRouter.delete(
   '/shopping/:id',
   handle(async (req, res) => {
     const { me, item } = await itemFor(req);
-    if (me.role !== 'parent' && item.created_by !== me.id) throw new HttpError(403, 'You can only remove what you added');
     const { error } = await db().from('shopping_items').delete().eq('id', item.id).eq('family_id', me.family_id);
     if (error) throw error;
     res.json({ ok: true });
@@ -94,14 +90,13 @@ shoppingRouter.delete(
 );
 
 /**
- * Remove many at once (parents only): ?scope=bought (only bought products) or ?scope=all,
- * optionally limited to one ?category=. Only products this parent can see are removed.
+ * Remove many at once: ?scope=bought (only bought products) or ?scope=all, optionally limited
+ * to one ?category=. Only products shared with this member (or theirs) are removed.
  */
 shoppingRouter.delete(
   '/shopping',
   handle(async (req, res) => {
     const me = memberOf(req);
-    if (me.role !== 'parent') throw new HttpError(403, 'Only a parent can clear the list');
     const scope = req.query.scope;
     if (scope !== 'bought' && scope !== 'all') throw new HttpError(400, 'scope must be bought or all');
     let q = db().from('shopping_items').delete().eq('family_id', me.family_id).or(visibleTo(me));
