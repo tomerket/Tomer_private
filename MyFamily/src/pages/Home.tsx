@@ -120,13 +120,21 @@ export default function Home() {
           )}
         </div>
 
-        {/* All family names on one line */}
-        <div className="flex flex-nowrap justify-start gap-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none] sm:justify-center">
+        {/* Family names: phones 3 per row (more rows when needed); bigger screens one line */}
+        <div className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-nowrap sm:justify-center sm:gap-2 sm:overflow-x-auto sm:whitespace-nowrap sm:[scrollbar-width:none]">
           {me.members.map((m) => (
-            <div key={m.id} className="flex shrink-0 items-center gap-2 rounded-full bg-soft py-1 pl-1 pr-3">
-              <Avatar name={m.name} photoUrl={m.photoUrl} role={m.role} size={40} />
-              <span className="font-bold">{m.name}</span>
-              <span className="text-sm text-muted">{m.age}</span>
+            <div key={m.id} className="flex min-w-0 shrink-0 items-center gap-1 rounded-full bg-soft py-1 pl-1 pr-2 sm:gap-2 sm:pr-3">
+              <span className="flex shrink-0 sm:hidden">
+                <Avatar name={m.name} photoUrl={m.photoUrl} role={m.role} size={28} />
+              </span>
+              <span className="hidden shrink-0 sm:flex">
+                <Avatar name={m.name} photoUrl={m.photoUrl} role={m.role} size={40} />
+              </span>
+              {/* Phones: the age goes under the name so the whole name fits */}
+              <span className="flex min-w-0 flex-col leading-tight sm:flex-row sm:items-baseline sm:gap-2">
+                <span className="min-w-0 truncate text-[13px] font-bold sm:text-base">{m.name}</span>
+                <span className="text-[11px] text-muted sm:text-sm">{m.age}</span>
+              </span>
             </div>
           ))}
         </div>

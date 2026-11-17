@@ -7,6 +7,10 @@ import { api } from '../lib/api';
 import { colorFor, useCategories } from '../lib/categories';
 import { useSession } from '../lib/session';
 
+/** Small outline button (not .btn, whose sizes can't be overridden): compact on phones. */
+const SMALL_BTN =
+  'inline-flex items-center gap-1 rounded-full border-2 border-line bg-white px-2.5 py-1 text-xs font-bold hover:bg-violet-soft sm:gap-2 sm:px-4 sm:py-2 sm:text-base';
+
 type Item = { id: string; category: string; name: string; bought: boolean; bought_at: string | null; created_by: string | null; created_at: string };
 
 
@@ -212,19 +216,20 @@ export default function Shopping() {
         !error && <div className="py-10 text-center text-muted">Loading…</div>
       ) : (
         <>
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <span className="text-lg font-bold text-muted">
+          <div className="mb-2 flex flex-wrap items-center gap-2 sm:mb-3">
+            <span className="text-sm font-bold text-muted sm:text-lg">
               {items.length === 0 ? 'The list is empty. Add the first product above.' : `${items.length - boughtCount} to buy${boughtCount > 0 ? `, ${boughtCount} bought` : ''}`}
             </span>
             {isParent && items.length > 0 && (
-              <div className="ml-auto flex flex-wrap gap-2">
+              <div className="ml-auto flex flex-wrap gap-1.5 sm:gap-2">
                 {boughtCount > 0 && (
-                  <button className="btn btn-ghost px-4 py-2" onClick={() => clearBought()}>
-                    <Check size={18} /> Remove bought
+                  <button className={SMALL_BTN} onClick={() => clearBought()}>
+                    <Check className="h-3.5 w-3.5 sm:h-[18px] sm:w-[18px]" /> Remove bought
                   </button>
                 )}
-                <button className="btn btn-ghost px-4 py-2 text-danger" onClick={() => clearAll()}>
-                  <Trash2 size={18} /> Delete whole list
+                <button className={`${SMALL_BTN} text-danger`} onClick={() => clearAll()}>
+                  <Trash2 className="h-3.5 w-3.5 sm:h-[18px] sm:w-[18px]" /> <span className="sm:hidden">Delete all</span>
+                  <span className="hidden sm:inline">Delete whole list</span>
                 </button>
               </div>
             )}
@@ -237,45 +242,53 @@ export default function Shopping() {
               const anyBought = col.items.length > left;
               return (
                 <section key={col.name} className="flex flex-col overflow-hidden rounded-2xl border-2 bg-white" style={{ borderColor: c.bg }}>
-                  <div className="flex items-center gap-1 px-3 py-2.5" style={{ background: c.bg, color: c.fg }}>
-                    <h2 className="min-w-0 flex-1 break-words text-xl font-extrabold leading-tight">{col.name}</h2>
-                    <span className="shrink-0 text-sm font-bold">{col.items.length === 0 ? '' : left === 0 ? 'All bought' : `${left} left`}</span>
+                  {/* Phones: name with the count under it; the column buttons show from tablet size up */}
+                  <div className="flex flex-wrap items-center gap-x-1 px-2 py-1.5 sm:flex-nowrap sm:px-3 sm:py-2.5" style={{ background: c.bg, color: c.fg }}>
+                    <h2 className="w-full min-w-0 break-words text-sm font-extrabold leading-tight sm:w-auto sm:flex-1 sm:text-xl">{col.name}</h2>
+                    <span className="shrink-0 text-[11px] font-bold sm:text-sm">{col.items.length === 0 ? '' : left === 0 ? 'All bought' : `${left} left`}</span>
                     {isParent && anyBought && (
-                      <button className="rounded-lg p-1 hover:bg-white/60" title={`Remove bought from ${col.name}`} aria-label={`Remove bought from ${col.name}`} onClick={() => clearBought(col.name)}>
+                      <button className="hidden rounded-lg p-1 hover:bg-white/60 sm:inline-flex" title={`Remove bought from ${col.name}`} aria-label={`Remove bought from ${col.name}`} onClick={() => clearBought(col.name)}>
                         <Check size={18} />
                       </button>
                     )}
                     {isParent && col.items.length > 0 && (
-                      <button className="rounded-lg p-1 hover:bg-white/60" title={`Empty ${col.name}`} aria-label={`Empty the ${col.name} list`} onClick={() => clearAll(col.name)}>
+                      <button className="hidden rounded-lg p-1 hover:bg-white/60 sm:inline-flex" title={`Empty ${col.name}`} aria-label={`Empty the ${col.name} list`} onClick={() => clearAll(col.name)}>
                         <Trash2 size={18} />
                       </button>
                     )}
                     {isParent && col.id && col.items.length === 0 && (
-                      <button className="rounded-lg p-1 hover:bg-white/60" title={`Remove the ${col.name} category`} aria-label={`Remove the ${col.name} category`} onClick={() => removeCategory(col.id!, col.name)}>
+                      <button className="hidden rounded-lg p-1 hover:bg-white/60 sm:inline-flex" title={`Remove the ${col.name} category`} aria-label={`Remove the ${col.name} category`} onClick={() => removeCategory(col.id!, col.name)}>
                         <X size={18} />
                       </button>
                     )}
                   </div>
                   {col.items.length === 0 ? (
-                    <p className="px-3 py-4 text-center text-muted">Nothing here yet</p>
+                    <p className="px-2 py-3 text-center text-xs text-muted sm:px-3 sm:py-4 sm:text-base">Nothing here yet</p>
                   ) : (
                     <ul className="flex flex-col">
                       {col.items.map((i) => (
-                        <li key={i.id} className="flex w-full items-center gap-2 border-t border-line px-2 py-1 first:border-t-0">
+                        <li key={i.id} className="flex w-full items-center gap-0.5 border-t border-line py-0.5 pl-1 pr-0.5 first:border-t-0 sm:gap-2 sm:px-2 sm:py-1">
                           <button
                             onClick={() => toggle(i)}
                             aria-pressed={i.bought}
                             aria-label={i.bought ? `${i.name}: bought. Tap to put back` : `Mark ${i.name} as bought`}
-                            className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left"
+                            className="flex min-w-0 flex-1 items-center gap-1 py-1 text-left sm:gap-2"
                           >
-                            <span className="stamp stamp-bold h-8 w-8" data-on={i.bought}>
-                              {i.bought && <Check size={18} strokeWidth={4} className="text-white" />}
+                            <span className="stamp stamp-bold stamp-sm h-[18px] w-[18px] sm:h-8 sm:w-8" data-on={i.bought}>
+                              {i.bought && <Check size={12} strokeWidth={4} className="text-white sm:hidden" />}
+                              {i.bought && <Check size={18} strokeWidth={4} className="hidden text-white sm:block" />}
                             </span>
-                            <span className={`min-w-0 break-words text-lg font-semibold ${i.bought ? 'text-muted line-through decoration-2' : 'text-ink'}`}>{i.name}</span>
+                            {/* Hyphenate long words instead of cutting them anywhere */}
+                            <span
+                              lang="en"
+                              className={`min-w-0 break-words text-[13px] font-semibold leading-tight hyphens-auto sm:text-lg ${i.bought ? 'text-muted line-through decoration-2' : 'text-ink'}`}
+                            >
+                              {i.name}
+                            </span>
                           </button>
                           {canRemove(i) && (
-                            <button aria-label={`Delete ${i.name}`} title="Delete" className="rounded-lg p-1 text-muted hover:bg-soft hover:text-danger" onClick={() => removeOne(i)}>
-                              <Trash2 size={17} />
+                            <button aria-label={`Delete ${i.name}`} title="Delete" className="shrink-0 rounded-lg p-0.5 text-muted hover:bg-soft hover:text-danger sm:p-1" onClick={() => removeOne(i)}>
+                              <Trash2 className="h-3 w-3 sm:h-[17px] sm:w-[17px]" />
                             </button>
                           )}
                         </li>
@@ -319,7 +332,7 @@ function Columns({ count, children }: { count: number; children: React.ReactNode
   return (
     <div>
       {hidden && (
-        <div role="status" className="mb-2 flex items-center gap-2 rounded-2xl border-2 border-sun bg-sun-soft px-3 py-2 font-bold text-sun-ink">
+        <div role="status" className="mb-2 flex items-center gap-2 rounded-2xl border-2 border-sun bg-sun-soft px-2.5 py-1.5 text-xs font-bold text-sun-ink sm:px-3 sm:py-2 sm:text-base">
           <span className="flex-1">
             {count} categories, not all fit on the screen. Scroll {scroll.right ? 'right' : 'left'} to see the rest.
           </span>
@@ -331,10 +344,13 @@ function Columns({ count, children }: { count: number; children: React.ReactNode
           </button>
         </div>
       )}
-      <div ref={ref} className="flex snap-x gap-4 overflow-x-auto pb-2">
+      <div ref={ref} className="flex snap-x gap-2 overflow-x-auto pb-2 sm:gap-4">
         {Array.isArray(children)
           ? children.map((child, i) => (
-              <div key={i} className="w-[78%] shrink-0 snap-start sm:w-[calc((100%_-_1rem)/2)] lg:w-[calc((100%_-_3rem)/4)] xl:w-[calc((100%_-_4rem)/5)]">
+              <div
+                key={i}
+                className="w-[calc((100%_-_1rem)/3)] shrink-0 snap-start sm:w-[calc((100%_-_1rem)/2)] lg:w-[calc((100%_-_3rem)/4)] xl:w-[calc((100%_-_4rem)/5)]"
+              >
                 {child}
               </div>
             ))
