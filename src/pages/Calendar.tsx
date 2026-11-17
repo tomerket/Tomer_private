@@ -6,6 +6,7 @@ import { ErrorBox } from '../components/ui';
 import { api, today } from '../lib/api';
 import { colorFor, useCategories } from '../lib/categories';
 import { useSession } from '../lib/session';
+import { ShareChip, SharePicker, type SharedWith } from '../components/SharePicker';
 
 export type CalEvent = {
   id: string;
@@ -17,6 +18,7 @@ export type CalEvent = {
   category: string | null;
   remind_on: string | null;
   remind_time: string | null;
+  shared_with: SharedWith; // null = all family, [] = only the creator
   created_by: string | null;
   created_at: string;
 };
@@ -167,6 +169,7 @@ export default function Calendar() {
                   {e.category}
                 </span>
               )}
+              <ShareChip shared={e.shared_with} createdBy={e.created_by} className="px-2 py-0.5 text-xs" />
               {(showDate || e.end_day) && <span className="text-ink">{whenText(e)}</span>}
               {e.time && (
                 <span className="inline-flex items-center gap-1">
@@ -499,6 +502,10 @@ function EventForm({
     if (v && !remindTime) setRemindTime('08:00');
   };
   const [note, setNote] = useState(initial?.note ?? '');
+  // New activities start as "Only me"; sharing is the creator's choice
+  const [sharedWith, setSharedWith] = useState<SharedWith>(initial ? initial.shared_with : []);
+  const { me } = useSession();
+  const isCreator = !initial || initial.created_by === me?.member?.id;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -538,6 +545,7 @@ function EventForm({
         remindOn: remindOn || null,
         remindTime: remindOn ? remindTime || null : null,
         note,
+        ...(isCreator ? { sharedWith: sharedWith ?? 'all' } : {}),
       };
       const { event } = initial
         ? await api<{ event: CalEvent }>(`/calendar/${initial.id}`, { method: 'PATCH', body })
@@ -674,6 +682,14 @@ function EventForm({
           </div>
           <p className="mt-1 text-sm text-muted">From then until the activity is over, it shows under Reminders on the Calendar and Home pages.</p>
         </div>
+
+        {isCreator ? (
+          <SharePicker value={sharedWith} onChange={setSharedWith} />
+        ) : (
+          <p className="text-sm text-muted">
+            Shared with: <ShareChip shared={sharedWith} createdBy={initial?.created_by ?? null} className="px-2 py-0.5 text-xs" /> (only the person who added it can change this)
+          </p>
+        )}
 
         <label className="block">
           <span className="label">Note</span>

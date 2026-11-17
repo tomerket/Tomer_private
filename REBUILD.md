@@ -199,6 +199,7 @@ create table calendar_events (
   category text check (category is null or char_length(category) between 1 and 30),
   remind_on date check (remind_on is null or remind_on <= day),
   remind_time text check (remind_time is null or remind_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'),
+  shared_with uuid[],                 -- null = all family; [] = only the creator; [ids] = creator + those
   created_by uuid references members(id) on delete set null,
   created_at timestamptz not null default now()
 );
@@ -211,6 +212,7 @@ create table shopping_items (
   name text not null check (char_length(name) between 1 and 80),
   bought boolean not null default false,
   bought_at timestamptz,
+  shared_with uuid[],                 -- same meaning as calendar_events.shared_with
   created_by uuid references members(id) on delete set null,
   created_at timestamptz not null default now()
 );
@@ -345,6 +347,28 @@ create table member_login_failures (
   - A task ticked in All open leaves that list. Unticking a task in Done reopens it.
 - **"Everyone / parent" dropdown:** shows only the chosen parents' tasks.
 - **Each parent has their own colour.** It shows on the left stripe of the task, the name chip (no "For" word) and the dot in the filter. Colours are assigned by the parent's fixed position, in this order of the category palette: 2, 3, 1, 6, 4, 0, 5, 7.
+
+### Sharing (calendar activities and shopping products)
+
+- **Choices:** every activity and product has a "Share with" choice: **Only me** (the default for new ones), **All family**, or **Choose people** from the family.
+  - Stored in `shared_with`: `[]`, `null` or a list of member ids.
+  - The API takes `sharedWith: 'all' | [ids]`; leaving it out means only the creator.
+  - Ids from another family get 400.
+- **Visibility:** a member sees a row when any one of these holds:
+  - They made it.
+  - It's shared with all (`shared_with` is null).
+  - Their id is in `shared_with`.
+
+  The PostgREST filter is `created_by.eq.ME,shared_with.is.null,shared_with.cs.{ME}`. It's combined with other OR filters as `and(or(…),or(…))`.
+- **Applies everywhere:** every list, reminder, Next 10, tick and edit applies the visibility rule. Anything you can't see is **404**, including a parent's bulk "delete whole list", which only removes what they can see.
+- **Changing it:** only the creator can change `shared_with` (403 for anyone else).
+- **The chip:** each activity, and each product not yet bought, shows a chip:
+  - "All Family"
+  - "Only me" / "Only Dana"
+  - the names it's shared with (for example "Dana, Omer")
+
+  On phones the chip has no icon and may wrap.
+- **Existing rows:** rows from before sharing existed keep `null`, so they stay visible to everyone.
 
 ### Calendar
 
