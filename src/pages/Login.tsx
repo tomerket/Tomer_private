@@ -23,7 +23,7 @@ export default function Login() {
   const [tab, setTab] = useState<Tab>('member');
   const [idle] = useState(takeIdleFlag);
   return (
-    <AuthShell title="Welcome back" subtitle="Sign in to your family">
+    <AuthShell title="Welcome!" subtitle="Sign in to your family">
       {idle && (
         <div role="status" className="mb-5 rounded-xl border-2 border-sun bg-sun-soft px-4 py-3 font-semibold text-sun-ink">
           You were logged out after {IDLE_MINUTES} minutes without activity. Please sign in again.
