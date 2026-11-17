@@ -124,7 +124,11 @@ const SECTIONS: Section[] = [
             <b>Next 10</b> lists the coming activities, all or by category. <b>Share</b> sends the list by WhatsApp, email and so on (on a
             computer it copies it).
           </li>
-          <li>Everyone can add. Parents can change or delete anything; kids only what they added.</li>
+          <li>
+            <b>Share with</b>: <i>Only me</i> (the default), <i>All family</i>, or <i>Choose people</i>. Each activity shows who it is shared
+            with. Only the person who added it can change this.
+          </li>
+          <li>Everyone can add. Parents can change or delete anything shared with them; kids only what they added.</li>
         </ul>
       </>
     ),
@@ -140,6 +144,10 @@ const SECTIONS: Section[] = [
           <li>Each category is a column with its own color. When they don't all fit, a notice and arrows help you scroll to the rest.</li>
           <li>Tap a product after buying it to cross it out; tap again to put it back.</li>
           <li>Delete one product with its bin. Parents can also remove all bought products, empty a category, or delete the whole list.</li>
+          <li>
+            <b>Share with</b>: <i>Only me</i> (the default), <i>All family</i>, or chosen people. Products still to buy show who they are
+            shared with, for example <i>All Family</i> or <i>Dana, Omer</i>.
+          </li>
           <li>Kids can delete only what they added.</li>
         </ul>
       </>

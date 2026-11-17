@@ -6,12 +6,22 @@ import { ErrorBox } from '../components/ui';
 import { api } from '../lib/api';
 import { colorFor, useCategories } from '../lib/categories';
 import { useSession } from '../lib/session';
+import { ShareChip, SharePicker, type SharedWith } from '../components/SharePicker';
 
 /** Small outline button (not .btn, whose sizes can't be overridden): compact on phones. */
 const SMALL_BTN =
   'inline-flex items-center gap-1 rounded-full border-2 border-line bg-white px-2.5 py-1 text-xs font-bold hover:bg-violet-soft sm:gap-2 sm:px-4 sm:py-2 sm:text-base';
 
-type Item = { id: string; category: string; name: string; bought: boolean; bought_at: string | null; created_by: string | null; created_at: string };
+type Item = {
+  id: string;
+  category: string;
+  name: string;
+  bought: boolean;
+  bought_at: string | null;
+  shared_with: SharedWith; // null = all family, [] = only the person who added it
+  created_by: string | null;
+  created_at: string;
+};
 
 
 export default function Shopping() {
@@ -23,6 +33,7 @@ export default function Shopping() {
   const [category, setCategory] = useState('');
   const [product, setProduct] = useState('');
   const [newCat, setNewCat] = useState<string | null>(null); // typing a new category
+  const [sharedWith, setSharedWith] = useState<SharedWith>([]); // new products start as "Only me"
   const [busy, setBusy] = useState(false);
   const categoryRef = useRef<HTMLSelectElement>(null);
   const productRef = useRef<HTMLTextAreaElement>(null);
@@ -74,7 +85,7 @@ export default function Shopping() {
     if (names.length === 0) return setError('Write a product');
     setBusy(true);
     try {
-      const r = await api<{ items: Item[] }>('/shopping', { body: { category, names } });
+      const r = await api<{ items: Item[] }>('/shopping', { body: { category, names, sharedWith: sharedWith ?? 'all' } });
       setItems((l) => [...(l ?? []), ...r.items]);
       // Start fresh for the next one
       setProduct('');
@@ -208,6 +219,7 @@ export default function Shopping() {
         <p className="text-sm text-muted">
           {allNames.length === 0 ? 'Start with “+ New” to add your first category, e.g. Groceries.' : 'Write one product per line. Each one goes on its own line in the list.'}
         </p>
+        <SharePicker value={sharedWith} onChange={setSharedWith} />
       </form>
 
       <ErrorBox message={error} />
@@ -221,7 +233,7 @@ export default function Shopping() {
               {items.length === 0 ? 'The list is empty. Add the first product above.' : `${items.length - boughtCount} to buy${boughtCount > 0 ? `, ${boughtCount} bought` : ''}`}
             </span>
             {isParent && items.length > 0 && (
-              <div className="ml-auto flex flex-wrap gap-1.5 sm:gap-2">
+              <div className="ml-auto flex flex-nowrap gap-1.5 whitespace-nowrap sm:gap-2">
                 {boughtCount > 0 && (
                   <button className={SMALL_BTN} onClick={() => clearBought()}>
                     <Check className="h-3.5 w-3.5 sm:h-[18px] sm:w-[18px]" /> Remove bought
@@ -279,11 +291,15 @@ export default function Shopping() {
                               {i.bought && <Check size={18} strokeWidth={4} className="hidden text-white sm:block" />}
                             </span>
                             {/* Hyphenate long words instead of cutting them anywhere */}
-                            <span
-                              lang="en"
-                              className={`min-w-0 break-words text-[13px] font-semibold leading-tight hyphens-auto sm:text-lg ${i.bought ? 'text-muted line-through decoration-2' : 'text-ink'}`}
-                            >
-                              {i.name}
+                            <span className="flex min-w-0 flex-col items-start gap-0.5">
+                              <span
+                                lang="en"
+                                className={`min-w-0 max-w-full break-words text-[13px] font-semibold leading-tight hyphens-auto sm:text-lg ${i.bought ? 'text-muted line-through decoration-2' : 'text-ink'}`}
+                              >
+                                {i.name}
+                              </span>
+                              {/* Open products: who they're shared with ("All Family", names, or "Only …") */}
+                              {!i.bought && <ShareChip shared={i.shared_with} createdBy={i.created_by} className="px-1.5 text-[10px] sm:px-2 sm:text-xs" />}
                             </span>
                           </button>
                           {canRemove(i) && (

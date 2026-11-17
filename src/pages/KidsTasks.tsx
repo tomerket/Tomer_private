@@ -134,19 +134,28 @@ export default function KidsTasks() {
         <Link to="/tasks" className="mr-2 inline-flex items-center gap-1 text-lg font-bold text-violet hover:underline">
           <ChevronLeft size={22} /> Family Tasks
         </Link>
-        {kids.length > 1 &&
-          kids.map((k) => (
-            <button
-              key={k.id}
-              onClick={() => setKidId(k.id)}
-              className={`flex items-center gap-2 rounded-full py-1 pl-1 pr-4 text-lg font-bold transition ${
-                k.id === kidId ? 'bg-violet text-white shadow' : 'bg-soft text-ink hover:bg-violet-soft'
-              }`}
-            >
-              <Avatar name={k.name} photoUrl={k.photoUrl} role="kid" size={32} />
-              {k.name}
-            </button>
-          ))}
+        {/* Phones: kids on their own rows, 3 per row; bigger screens: inline as before */}
+        {kids.length > 1 && (
+          <div className="grid w-full grid-cols-3 gap-1.5 sm:contents">
+            {kids.map((k) => (
+              <button
+                key={k.id}
+                onClick={() => setKidId(k.id)}
+                className={`flex min-w-0 items-center gap-1.5 rounded-full py-1 pl-1 pr-2 text-sm font-bold transition sm:gap-2 sm:pr-4 sm:text-lg ${
+                  k.id === kidId ? 'bg-violet text-white shadow' : 'bg-soft text-ink hover:bg-violet-soft'
+                }`}
+              >
+                <span className="flex shrink-0 sm:hidden">
+                  <Avatar name={k.name} photoUrl={k.photoUrl} role="kid" size={26} />
+                </span>
+                <span className="hidden shrink-0 sm:flex">
+                  <Avatar name={k.name} photoUrl={k.photoUrl} role="kid" size={32} />
+                </span>
+                <span className="min-w-0 truncate">{k.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <button
           className="btn ml-auto bg-sun-soft px-4 py-2.5 text-sun-ink hover:bg-sun"
           onClick={() => setShowRewards(true)}

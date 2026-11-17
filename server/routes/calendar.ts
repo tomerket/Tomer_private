@@ -2,11 +2,15 @@ import { Router, type Request } from 'express';
 import { memberOf, requireCaller, type Member } from '../auth.js';
 import { db } from '../supabase.js';
 import { handle, HttpError, parseDay, requireText } from '../util.js';
+import { canSee, parseSharedWith, visibleTo } from '../sharing.js';
 
 export const calendarRouter = Router();
 calendarRouter.use('/calendar', requireCaller);
 
-const EV_COLS = 'id, title, day, end_day, time, note, category, remind_on, remind_time, created_by, created_at';
+const EV_COLS = 'id, title, day, end_day, time, note, category, remind_on, remind_time, shared_with, created_by, created_at';
+
+/** Both conditions (each an OR-list) in one PostgREST `or` filter. */
+const both = (a: string, b: string) => `and(or(${a}),or(${b}))`;
 const MAX_RANGE_DAYS = 62;
 const UPCOMING = 10;
 
@@ -55,11 +59,11 @@ async function eventFor(req: Request): Promise<{ me: Member; ev: Ev & { id: stri
   const me = memberOf(req);
   const { data } = await db()
     .from('calendar_events')
-    .select('id, day, end_day, time, remind_on, remind_time, created_by')
+    .select('id, day, end_day, time, remind_on, remind_time, shared_with, created_by')
     .eq('id', String(req.params.id))
     .eq('family_id', me.family_id)
     .maybeSingle();
-  if (!data) throw new HttpError(404, 'Activity not found');
+  if (!data || !canSee(data, me)) throw new HttpError(404, 'Activity not found'); // not shared with you = not there
   if (me.role !== 'parent' && data.created_by !== me.id) throw new HttpError(403, 'You can only change what you added');
   return { me, ev: data };
 }
@@ -79,8 +83,8 @@ calendarRouter.get(
     if (from > to) throw new HttpError(400, '"From" must be before "To"');
     if ((Date.parse(to) - Date.parse(from)) / 86_400_000 + 1 > MAX_RANGE_DAYS) throw new HttpError(400, 'Range is too long');
     const [{ data: events, error }, { data: reminders, error: rErr }, { data: members, error: mErr }] = await Promise.all([
-      db().from('calendar_events').select(EV_COLS).eq('family_id', me.family_id).lte('day', to).or(notOverOn(from)).order('day').order('time', { nullsFirst: true }),
-      db().from('calendar_events').select(EV_COLS).eq('family_id', me.family_id).lte('remind_on', today).or(notOverOn(today)).order('day').order('time', { nullsFirst: true }),
+      db().from('calendar_events').select(EV_COLS).eq('family_id', me.family_id).lte('day', to).or(both(notOverOn(from), visibleTo(me))).order('day').order('time', { nullsFirst: true }),
+      db().from('calendar_events').select(EV_COLS).eq('family_id', me.family_id).lte('remind_on', today).or(both(notOverOn(today), visibleTo(me))).order('day').order('time', { nullsFirst: true }),
       db().from('members').select('id, name, birthday').eq('family_id', me.family_id),
     ]);
     if (error || rErr || mErr) throw error ?? rErr ?? mErr;
@@ -99,7 +103,7 @@ calendarRouter.get(
   handle(async (req, res) => {
     const me = memberOf(req);
     const today = parseDay(req.query.today);
-    let q = db().from('calendar_events').select(EV_COLS).eq('family_id', me.family_id).or(notOverOn(today));
+    let q = db().from('calendar_events').select(EV_COLS).eq('family_id', me.family_id).or(both(notOverOn(today), visibleTo(me)));
     if (typeof req.query.category === 'string' && req.query.category) q = q.eq('category', req.query.category);
     const { data, error } = await q.order('day').order('time', { nullsFirst: true }).limit(UPCOMING);
     if (error) throw error;
@@ -125,6 +129,7 @@ calendarRouter.post(
       category: parseCategory(b.category),
       remind_on,
       remind_time: remind_on ? parseTime(b.remindTime, 'Reminder time') : null,
+      shared_with: await parseSharedWith(b.sharedWith, me), // not chosen = only the creator
     };
     const { data, error } = await db().from('calendar_events').insert(row).select(EV_COLS).single();
     if (error) throw error;
@@ -142,6 +147,10 @@ calendarRouter.patch(
     if ('time' in b) patch.time = parseTime(b.time);
     if ('note' in b) patch.note = parseNote(b.note);
     if ('category' in b) patch.category = parseCategory(b.category);
+    if ('sharedWith' in b) {
+      if (ev.created_by !== me.id) throw new HttpError(403, 'Only the person who added it can change who it is shared with');
+      patch.shared_with = await parseSharedWith(b.sharedWith, me);
+    }
     const day = 'day' in b ? parseDay(b.day) : ev.day;
     if ('day' in b) patch.day = day;
     if ('endDay' in b) patch.end_day = parseEnd(b.endDay, day);
