@@ -91,8 +91,8 @@ export default function Calendar() {
   const [reload, setReload] = useState(0);
 
   const grid = useMemo(() => monthGrid(view.y, view.m), [view]);
-  const isParent = me?.member?.role === 'parent';
-  const canChange = (e: CalEvent) => isParent || e.created_by === me?.member?.id;
+  // Everything you can see was made by you or shared with you, so you can change it
+  const canChange = (_e: CalEvent) => true;
   const nameOf = (id: string | null) => me?.members.find((m) => m.id === id)?.name;
 
   const load = useCallback(async () => {
