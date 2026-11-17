@@ -1,4 +1,5 @@
-import { Check, ChevronLeft, ChevronRight, Gift, Lock, Smile, Trophy, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Gift, Lock, Smile, Trophy, X } from 'lucide-react';
+import { useIsPhone } from '../lib/useMedia';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AppLayout } from '../components/AppLayout';
@@ -58,6 +59,12 @@ export default function KidsTasks() {
   const [kidId, setKidId] = useState<string | null>(kids[0]?.id ?? null);
   const todayIso = today();
   const [day, setDay] = useState(todayIso);
+  const isPhone = useIsPhone();
+  // Phones: the part of the day it is now starts open; the others open with a tap
+  const [openPeriods, setOpenPeriods] = useState<Set<Period>>(() => {
+    const h = new Date().getHours();
+    return new Set<Period>([h < 12 ? 'morning' : h < 17 ? 'general' : 'evening']);
+  });
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -175,9 +182,9 @@ export default function KidsTasks() {
         <>
           {/* Progress + reward */}
           {/* Sticker strip: each finished task adds its own picture */}
-          <div className={`lift mb-4 rounded-[28px] px-5 py-4 ${allDone ? 'hero-gradient text-white' : 'bg-white'}`}>
+          <div className={`lift mb-3 rounded-[22px] px-3 py-2.5 sm:mb-4 sm:rounded-[28px] sm:px-5 sm:py-4 ${allDone ? 'hero-gradient text-white' : 'bg-white'}`}>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              <span className="text-2xl font-extrabold leading-tight sm:text-3xl">
+              <span className="text-lg font-extrabold leading-tight sm:text-3xl">
                 {allDone
                   ? `Amazing, ${kidName}! All done! 🎉`
                   : nextReward
@@ -191,25 +198,25 @@ export default function KidsTasks() {
                   <Lock size={14} /> View only
                 </span>
               )}
-              <span className={`ml-auto text-4xl font-extrabold tabular-nums ${allDone ? '' : 'text-violet'}`}>
+              <span className={`ml-auto text-2xl font-extrabold tabular-nums sm:text-4xl ${allDone ? '' : 'text-violet'}`}>
                 {done}/{total}
               </span>
             </div>
-            <div className="mt-3 flex flex-wrap gap-1.5" aria-label={`${done} of ${total} tasks done`}>
+            <div className="mt-2 flex flex-wrap gap-1 sm:mt-3 sm:gap-1.5" aria-label={`${done} of ${total} tasks done`}>
               {(tasks ?? []).map((t) =>
                 t.checked ? (
                   <TaskPicture
                     key={t.id}
                     icon={t.icon}
-                    className={`h-10 w-10 rounded-full border-[3px] bg-white ${allDone ? 'border-white' : 'border-violet'}`}
+                    className={`h-7 w-7 rounded-full border-2 bg-white sm:h-10 sm:w-10 sm:border-[3px] ${allDone ? 'border-white' : 'border-violet'}`}
                   />
                 ) : (
-                  <span key={t.id} title={t.title} className="h-10 w-10 rounded-full border-2 border-dashed border-line bg-soft" />
+                  <span key={t.id} title={t.title} className="h-7 w-7 rounded-full border-2 border-dashed border-line bg-soft sm:h-10 sm:w-10" />
                 ),
               )}
             </div>
             {bestReached && (
-              <div className="mt-2 flex items-center gap-2 text-lg font-bold">
+              <div className="mt-1.5 flex items-center gap-2 text-base font-bold sm:mt-2 sm:text-lg">
                 <Gift size={22} className={allDone ? '' : 'text-sun'} /> Reward earned: {bestReached.title}! 🏆
               </div>
             )}
@@ -226,6 +233,68 @@ export default function KidsTasks() {
                 if (list.length === 0) return null;
                 const s = SECTION_STYLE[p.key];
                 const sDone = list.filter((t) => t.checked).length;
+                if (isPhone) {
+                  const open = openPeriods.has(p.key);
+                  return (
+                    /* Phones: a small band that opens with a tap, tasks 3 to a row */
+                    <section key={p.key} className="rounded-[22px] p-2" style={{ background: s.bg }}>
+                      <button
+                        className="flex w-full items-center gap-2 rounded-2xl px-1 py-1 text-left"
+                        style={{ color: s.heading }}
+                        aria-expanded={open}
+                        onClick={() =>
+                          setOpenPeriods((o) => {
+                            const n = new Set(o);
+                            if (n.has(p.key)) n.delete(p.key);
+                            else n.add(p.key);
+                            return n;
+                          })
+                        }
+                      >
+                        <TaskPicture icon={p.icon} className="h-8 w-8 shrink-0 rounded-full" />
+                        <span className="text-lg font-extrabold leading-tight">{p.label}</span>
+                        {!open && (
+                          // Closed: a row of tiny pictures, the done ones ringed
+                          <span className="flex min-w-0 flex-1 gap-1 overflow-hidden px-1" aria-hidden>
+                            {list.map((t) => (
+                              <TaskPicture
+                                key={t.id}
+                                icon={t.icon}
+                                className={`h-6 w-6 shrink-0 rounded-full bg-white ${t.checked ? 'ring-2 ring-violet' : 'opacity-50'}`}
+                              />
+                            ))}
+                          </span>
+                        )}
+                        <span className={`shrink-0 font-extrabold ${open ? 'ml-auto' : ''}`}>
+                          {sDone}/{list.length}
+                        </span>
+                        <ChevronDown size={20} className={`shrink-0 transition ${open ? 'rotate-180' : ''}`} />
+                      </button>
+                      {open && (
+                        <div className="mt-2 grid grid-cols-3 gap-1.5">
+                          {list.map((t) => (
+                            <button
+                              key={t.id}
+                              onClick={() => toggle(t)}
+                              aria-pressed={t.checked}
+                              disabled={!canEdit}
+                              className={`relative flex flex-col items-center gap-1 rounded-2xl border-2 bg-white px-1 pb-1.5 pt-2 text-center transition active:scale-[0.97] disabled:cursor-default ${
+                                t.checked ? 'border-violet' : 'border-line'
+                              }`}
+                            >
+                              <TaskPicture icon={t.icon} className={`h-11 w-11 rounded-xl ${t.checked ? 'opacity-55' : ''}`} />
+                              <span className={`line-clamp-2 font-display text-[13px] font-bold leading-tight ${t.checked ? 'text-muted' : ''}`}>{t.title}</span>
+                              {t.mandatory && <span className="absolute left-1 top-1 h-2.5 w-2.5 rounded-full bg-danger" title="Must do" aria-label="Must do" />}
+                              <span className="stamp stamp-sm absolute right-1 top-1 h-6 w-6" data-on={t.checked}>
+                                {t.checked && <Check size={12} strokeWidth={4} className="text-white" />}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  );
+                }
                 return (
                   /* One horizontal band per time of day: label on the left, tasks side by side */
                   <section key={p.key} className="flex flex-col gap-3 rounded-[28px] p-3 sm:flex-row sm:items-stretch sm:p-4" style={{ background: s.bg }}>

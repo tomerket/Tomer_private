@@ -158,6 +158,15 @@ a:focus-visible {
   box-shadow: 0 2px 8px rgb(109 59 245 / 0.45);
 }
 
+/* Tiny circles on phones (shopping list, kids task tiles): thinner ring, no glow */
+@media (max-width: 639px) {
+  .stamp-sm,
+  .stamp-sm[data-on='true'] {
+    border-width: 2px;
+    box-shadow: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

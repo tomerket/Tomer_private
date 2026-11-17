@@ -1,6 +1,7 @@
 import { BarChart3, ChevronLeft, Gift } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useIsPhone } from '../lib/useMedia';
 import { AppLayout } from '../components/AppLayout';
 import { ErrorBox } from '../components/ui';
 import { api, today } from '../lib/api';
@@ -157,7 +158,7 @@ export default function Dashboard() {
                 <PeriodChart stats={stats} colorOf={colorOf} rangeText={rangeText} />
               </div>
 
-              <TaskRateChart stats={stats} />
+              <TaskRateChart stats={stats} rangeText={rangeText} />
 
               <RewardsTotals stats={stats} colorOf={colorOf} rangeText={rangeText} />
             </>
@@ -362,39 +363,43 @@ function RewardsTotals({ stats, colorOf, rangeText }: { stats: KidStats[]; color
   const all = new Map<string, KidStats['rewards'][number]>();
   stats.forEach((k) => k.rewards.forEach((r) => all.has(r.id) || all.set(r.id, r)));
   const rows = [...all.values()];
+  const isPhone = useIsPhone();
+  // Phones: narrow columns so more kids fit side by side; kid names may wrap under their dot
+  const col = isPhone ? { reward: 96, kid: 54, total: 44 } : { reward: 220, kid: 112, total: 96 };
   return (
     <section className="overflow-hidden rounded-2xl border-2 border-sun/40">
-      <div className="flex flex-wrap items-baseline justify-between gap-2 bg-sun-soft px-4 py-3">
-        <h3 className="flex items-center gap-2 text-xl font-extrabold">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 bg-sun-soft px-3 py-2.5 sm:px-4 sm:py-3">
+        <h3 className="flex items-center gap-2 text-lg font-extrabold sm:text-xl">
           <Gift className="text-sun-ink" /> Rewards earned per kid
         </h3>
-        <span className="text-sm font-semibold text-muted">Days earned, {rangeText}. Each reward can be earned once a day.</span>
+        {/* Phones: just the dates of the filter */}
+        <span className="text-sm font-semibold text-muted">{isPhone ? rangeText : `Days earned, ${rangeText}. Each reward can be earned once a day.`}</span>
       </div>
       {rows.length === 0 ? (
         <p className="px-4 py-4 text-muted">No rewards yet. Add them in Settings.</p>
       ) : (
         <div className="overflow-x-auto">
-          {/* On small screens the table keeps its columns readable and scrolls sideways */}
-          <table className="w-full table-fixed text-left" style={{ minWidth: 220 + stats.length * 112 + 96 }}>
+          {/* If there are still too many kids, the table scrolls sideways inside its box */}
+          <table className="w-full table-fixed text-left" style={{ minWidth: col.reward + stats.length * col.kid + col.total }}>
             <colgroup>
               <col />
               {stats.map((k) => (
-                <col key={k.id} className="w-28" />
+                <col key={k.id} style={{ width: col.kid }} />
               ))}
-              <col className="w-24" />
+              <col style={{ width: col.total }} />
             </colgroup>
             <thead>
-              <tr className="text-sm">
-                <th className="px-4 py-2 font-bold text-muted">Reward</th>
+              <tr className="text-xs sm:text-sm">
+                <th className="px-2 py-2 font-bold text-muted sm:px-4">Reward</th>
                 {stats.map((k) => (
-                  <th key={k.id} className="px-3 py-2 text-right font-extrabold">
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: colorOf(k.id) }} />
-                      {k.name}
+                  <th key={k.id} className="px-1 py-2 text-right font-extrabold sm:px-3">
+                    <span className="inline-flex flex-col items-end gap-0.5 leading-tight sm:flex-row sm:items-center sm:gap-1.5">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colorOf(k.id) }} />
+                      <span className="max-w-full break-words">{k.name}</span>
                     </span>
                   </th>
                 ))}
-                <th className="px-4 py-2 text-right font-extrabold">Total</th>
+                <th className="px-1 py-2 text-right font-extrabold sm:px-4">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -403,21 +408,21 @@ function RewardsTotals({ stats, colorOf, rangeText }: { stats: KidStats[]; color
                 const total = counts.reduce<number>((a, c) => a + (c ?? 0), 0);
                 return (
                   <tr key={r.id} className="border-t border-line">
-                    <td className="px-4 py-2">
-                      <div className="flex items-center gap-3">
-                        <img src={rewardIconUrl(r.icon)} alt="" className="h-10 w-10 shrink-0" />
+                    <td className="px-2 py-2 sm:px-4">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <img src={rewardIconUrl(r.icon)} alt="" className="h-7 w-7 shrink-0 sm:h-10 sm:w-10" />
                         <div className="min-w-0">
-                          <div className="truncate font-bold">{r.title}</div>
-                          <div className="truncate text-sm text-muted">{rewardRule(r)}</div>
+                          <div className="line-clamp-2 text-xs font-bold leading-tight sm:truncate sm:text-base">{r.title}</div>
+                          <div className="hidden truncate text-sm text-muted sm:block">{rewardRule(r)}</div>
                         </div>
                       </div>
                     </td>
                     {counts.map((c, i) => (
-                      <td key={stats[i].id} className="px-3 text-right text-xl font-extrabold tabular-nums" title={c === undefined ? 'Not for this kid' : `${stats[i].name}: earned on ${c} ${c === 1 ? 'day' : 'days'}`}>
+                      <td key={stats[i].id} className="px-1 text-right text-base font-extrabold tabular-nums sm:px-3 sm:text-xl" title={c === undefined ? 'Not for this kid' : `${stats[i].name}: earned on ${c} ${c === 1 ? 'day' : 'days'}`}>
                         {c === undefined ? <span className="text-muted">–</span> : c}
                       </td>
                     ))}
-                    <td className="px-4 text-right text-xl font-extrabold tabular-nums text-sun-ink">{total}</td>
+                    <td className="px-1 text-right text-base font-extrabold tabular-nums text-sun-ink sm:px-4 sm:text-xl">{total}</td>
                   </tr>
                 );
               })}
@@ -430,7 +435,7 @@ function RewardsTotals({ stats, colorOf, rangeText }: { stats: KidStats[]; color
 }
 
 /** Task rate: a bar chart of how often each task was completed (all selected kids together), best first. */
-function TaskRateChart({ stats }: { stats: KidStats[] }) {
+function TaskRateChart({ stats, rangeText }: { stats: KidStats[]; rangeText: string }) {
   const [hover, setHover] = useState<number | null>(null);
   const totals = new Map<number, { title: string; icon: string; done: number; total: number }>();
   stats.forEach((k) =>
@@ -447,7 +452,11 @@ function TaskRateChart({ stats }: { stats: KidStats[] }) {
     <section className="rounded-2xl border-2 border-line p-4">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-xl font-extrabold">Task rate</h3>
-        <span className="text-muted">How often each task was done. Point at a bar for details.</span>
+        {/* Phones: just the dates of the filter */}
+        <span className="text-muted max-sm:hidden">How often each task was done. Point at a bar for details.</span>
+        <span className="sm:hidden">
+          <Range text={rangeText} />
+        </span>
       </div>
       <div className="overflow-x-auto">
         <div className="relative" style={{ minWidth: rows.length * 52 }}>
