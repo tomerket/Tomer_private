@@ -1,13 +1,12 @@
-import { BarChart3, ChevronDown, ChevronLeft, Gift, X } from 'lucide-react';
+import { BarChart3, ChevronLeft, Gift } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AppLayout } from '../components/AppLayout';
-import { useConfirm } from '../components/ConfirmDialog';
 import { ErrorBox } from '../components/ui';
 import { api, today } from '../lib/api';
 import { useSession } from '../lib/session';
 import { PERIODS, type Period } from '../lib/taskIcons';
-import { SECTION_STYLE, TaskPicture } from './KidsTasks';
+import { TaskPicture } from './KidsTasks';
 import { CheckDropdown } from '../components/CheckDropdown';
 import { rewardIconUrl, rewardRule, type RewardKind } from '../lib/rewardIcons';
 
@@ -51,17 +50,15 @@ const PRESETS = [
 
 export default function Dashboard() {
   const { me } = useSession();
-  const [confirmDialog, confirm] = useConfirm();
   const kids = useMemo(() => (me?.members ?? []).filter((m) => m.role === 'kid'), [me]);
   const colorOf = (id: string) => SERIES[Math.max(0, kids.findIndex((k) => k.id === id)) % SERIES.length];
-  const [selected, setSelected] = useState<string[] | null>(() => (kids[0] ? [kids[0].id] : null)); // null = all kids
+  const [selected, setSelected] = useState<string[] | null>(null); // null = all kids (the default)
   const [range, setRange] = useState('7');
   const t = today();
   const [from, setFrom] = useState(addDays(t, -6));
   const [to, setTo] = useState(t);
   const [stats, setStats] = useState<KidStats[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     if (kids.length === 0) return;
@@ -73,18 +70,7 @@ export default function Dashboard() {
     return () => {
       stale = true;
     };
-  }, [kids.length, selected, from, to, reload]);
-
-
-  async function removeForKid(kidId: string, taskId: number, title: string, name: string) {
-    if (!(await confirm({ title: `Remove "${title}" for ${name}?`, text: "Other kids keep this task." }))) return;
-    try {
-      await api(`/kids/${kidId}/tasks/${taskId}?day=${today()}`, { method: 'DELETE' }); // counts until yesterday
-      setReload((n) => n + 1);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
+  }, [kids.length, selected, from, to]);
 
   const agg = stats && {
     done: stats.reduce((a, k) => a + k.summary.done, 0),
@@ -95,7 +81,6 @@ export default function Dashboard() {
 
   return (
     <AppLayout title="Dashboard" icon={<BarChart3 className="text-violet" />}>
-      {confirmDialog}
       <Link to="/tasks" className="mb-4 inline-flex items-center gap-1 text-xl font-bold text-violet hover:underline">
         <ChevronLeft size={24} /> Family Tasks
       </Link>
@@ -175,8 +160,6 @@ export default function Dashboard() {
               <TaskRateChart stats={stats} />
 
               <RewardsTotals stats={stats} colorOf={colorOf} rangeText={rangeText} />
-
-              <TaskPercent stats={stats} colorOf={colorOf} onRemove={removeForKid} rangeText={rangeText} />
             </>
           )}
         </div>
@@ -360,116 +343,6 @@ function PeriodChart({ stats, colorOf, rangeText }: { stats: KidStats[]; colorOf
           </div>
         ))}
       </div>
-    </section>
-  );
-}
-
-/**
- * Tasks Breakdown: % done per kid, grouped into Morning / During the day / Evening in their colors.
- * Closed by default (click to open). One table, so every kid's % sits in the same column,
- * with kid names once at the top.
- */
-function TaskPercent({
-  stats,
-  colorOf,
-  onRemove,
-  rangeText,
-}: {
-  stats: KidStats[];
-  colorOf: (id: string) => string;
-  onRemove: (kidId: string, taskId: number, title: string, name: string) => void;
-  rangeText: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const all = new Map<number, KidStats['tasks'][number]>();
-  stats.forEach((k) => k.tasks.forEach((x) => all.has(x.id) || all.set(x.id, x)));
-  return (
-    <section className="overflow-hidden rounded-2xl border-2 border-line">
-      <button
-        className="flex w-full items-center gap-2 px-4 py-3 text-left text-xl font-extrabold hover:bg-soft"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <ChevronDown size={22} className={`transition ${open ? '' : '-rotate-90'}`} />
-        Tasks Breakdown
-        <span className="ml-auto flex items-baseline gap-3 text-base font-semibold text-muted">
-          <Range text={rangeText} />
-          {open ? 'Hide' : 'Show'}
-        </span>
-      </button>
-      {open && (
-        <div className="overflow-x-auto border-t border-line">
-          <table className="w-full table-fixed text-left">
-            <colgroup>
-              <col />
-              {stats.map((k) => (
-                <col key={k.id} className="w-36" />
-              ))}
-            </colgroup>
-            <thead>
-              <tr className="bg-white">
-                <th className="px-4 py-2 font-bold text-muted">Task</th>
-                {stats.map((k) => (
-                  <th key={k.id} className="px-3 py-2 text-right font-extrabold">
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: colorOf(k.id) }} />
-                      {k.name}
-                    </span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            {PERIODS.map((p) => {
-              const list = [...all.values()].filter((x) => x.period === p.key);
-              if (!list.length) return null;
-              const s = SECTION_STYLE[p.key];
-              return (
-                <tbody key={p.key}>
-                  <tr>
-                    <td colSpan={stats.length + 1} className="px-4 py-1.5 text-base font-extrabold" style={{ background: s.bg, color: s.heading }}>
-                      <span className="inline-flex items-center gap-2">
-                        <TaskPicture icon={p.icon} className="h-7 w-7 rounded-full" /> {p.label}
-                      </span>
-                    </td>
-                  </tr>
-                  {list.map((task) => (
-                    <tr key={task.id} className="border-t border-line">
-                      <td className="px-4 py-1.5">
-                        <div className="flex items-center gap-2">
-                          <TaskPicture icon={task.icon} className="h-9 w-9 shrink-0 rounded-lg" />
-                          <span className={`truncate font-semibold ${task.archived ? 'text-muted line-through' : ''}`}>{task.title}</span>
-                        </div>
-                      </td>
-                      {stats.map((k) => {
-                        const st = k.tasks.find((x) => x.id === task.id);
-                        return (
-                          <td key={k.id} className="px-3" title={st ? `${k.name}: done ${st.done} of ${st.total} days` : `${k.name}: not on the list`}>
-                            <div className="flex items-center justify-end gap-1">
-                              <span className="w-14 text-right text-lg font-extrabold tabular-nums text-ink">{st ? `${pct(st.done, st.total)}%` : '–'}</span>
-                              <span className="w-7">
-                                {st && !task.archived && (
-                                  <button
-                                    aria-label={`Remove ${task.title} for ${k.name}`}
-                                    title={`Remove for ${k.name}`}
-                                    className="rounded-md p-1 text-muted hover:bg-soft hover:text-danger"
-                                    onClick={() => onRemove(k.id, task.id, task.title, k.name)}
-                                  >
-                                    <X size={16} />
-                                  </button>
-                                )}
-                              </span>
-                            </div>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              );
-            })}
-          </table>
-        </div>
-      )}
     </section>
   );
 }

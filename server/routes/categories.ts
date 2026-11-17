@@ -3,9 +3,9 @@ import { memberOf, requireCaller } from '../auth.js';
 import { db } from '../supabase.js';
 import { handle, HttpError, requireText } from '../util.js';
 
-/** Built-in categories every family gets; families can add more by hand. The shopping list starts empty. */
+/** Built-in categories every family gets; families can add more by hand. */
 export const DEFAULT_CATEGORIES: Record<'shopping' | 'calendar', readonly string[]> = {
-  shopping: [],
+  shopping: ['Groceries', 'Clothes', 'Appliances'],
   calendar: ['Vacation', 'Work', 'Kids'],
 };
 type Kind = keyof typeof DEFAULT_CATEGORIES;
