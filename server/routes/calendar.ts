@@ -54,7 +54,7 @@ function parseRemind(input: unknown, day: string): string | null {
 /** Activities still going on (or coming) on `day`: last day is today or later. */
 const notOverOn = (day: string) => `end_day.gte.${day},and(end_day.is.null,day.gte.${day})`;
 
-/** Parents can change anything; kids only what they added. */
+/** Anyone it is shared with can change or delete it (only the creator changes who it is shared with). */
 async function eventFor(req: Request): Promise<{ me: Member; ev: Ev & { id: string; created_by: string | null } }> {
   const me = memberOf(req);
   const { data } = await db()
@@ -64,7 +64,6 @@ async function eventFor(req: Request): Promise<{ me: Member; ev: Ev & { id: stri
     .eq('family_id', me.family_id)
     .maybeSingle();
   if (!data || !canSee(data, me)) throw new HttpError(404, 'Activity not found'); // not shared with you = not there
-  if (me.role !== 'parent' && data.created_by !== me.id) throw new HttpError(403, 'You can only change what you added');
   return { me, ev: data };
 }
 

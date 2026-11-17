@@ -384,7 +384,7 @@ create table member_login_failures (
   - **Share** uses `navigator.share`. If that's missing, it copies the list to the clipboard instead.
   - Shared text: "Our next activities:" followed by one "• Sat, Dec 20 to Sun, Dec 28, 4:30 PM: Title (Category)" line per activity.
 - **Editing.**
-  - Everyone can add. Parents can change or delete any activity; kids only their own.
+  - Everyone can add. Anyone an activity is shared with (or its creator) can change or delete it; only the creator changes who it's shared with.
   - Moving an activity earlier than its reminder moves the reminder to the new date.
 
 ### Shopping list
@@ -396,13 +396,13 @@ create table member_login_failures (
   - Products stack one under another.
   - Tapping a product marks it as bought (crossed out); tapping again puts it back.
 - **Deleting.**
-  - The bin on a product deletes it. Kids can only delete what they added.
-  - Parents can also do the following, each asking first:
+  - The bin on a product deletes it. Anyone a product is shared with can tick, change or delete it.
+  - Anyone can also do the following, each asking first and touching only products shared with them:
     - Remove bought (all, or one category)
     - Empty a category
     - Delete the whole list
-    - Remove one of their own categories once it's empty
-- **Scrolling.** Up to 5 columns fit on wide screens (4 on laptops, 2 on tablets, about 1.3 on phones), and the rest scroll sideways.
+  - Parents can also remove one of the family's own categories once it's empty.
+- **Scrolling.** Up to 5 columns fit on wide screens (4 on laptops, 2 on tablets, 3 compact ones on phones), and the rest scroll sideways.
   - When some columns are off screen, a yellow notice "N categories, not all fit on the screen. Scroll right to see the rest." appears, with ‹ › buttons.
 
 ### Login and onboarding
@@ -430,6 +430,7 @@ create table member_login_failures (
 
 - **Home**
   - "Hi <name>!" and "The <Family name> Family" in large type.
+  - The app version in small muted text at the top right, as "v" + major.minor from `package.json` (1.0.0 shows **v1.0**). Vite injects it as `__APP_VERSION__`.
   - The admin sees a camera button to change the photo, and a remove button.
   - The Reminders strip appears when any reminders are due.
   - The family photo is shown **whole, never cropped**, centred with white margins. Until one is uploaded, `public/default-family.jpg` shows with a "Sample photo" note.
