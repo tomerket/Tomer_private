@@ -168,7 +168,7 @@ export default function Dashboard() {
                 <PeriodChart stats={stats} colorOf={colorOf} rangeText={rangeText} />
               </div>
 
-              <TaskRateChart stats={stats} rangeText={rangeText} />
+              <TaskRateChart stats={stats} />
 
               <RewardsTotals stats={stats} colorOf={colorOf} rangeText={rangeText} />
 
@@ -542,7 +542,7 @@ function RewardsTotals({ stats, colorOf, rangeText }: { stats: KidStats[]; color
 }
 
 /** Task rate: a bar chart of how often each task was completed (all selected kids together), best first. */
-function TaskRateChart({ stats, rangeText }: { stats: KidStats[]; rangeText: string }) {
+function TaskRateChart({ stats }: { stats: KidStats[] }) {
   const [hover, setHover] = useState<number | null>(null);
   const totals = new Map<number, { title: string; icon: string; done: number; total: number }>();
   stats.forEach((k) =>
@@ -555,14 +555,11 @@ function TaskRateChart({ stats, rangeText }: { stats: KidStats[]; rangeText: str
   );
   const rows = [...totals.values()].filter((r) => r.total > 0).sort((a, b) => pct(b.done, b.total) - pct(a.done, a.total));
   if (!rows.length) return null;
-  const shown = hover !== null ? rows[hover] : null;
   return (
     <section className="rounded-2xl border-2 border-line p-4">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-xl font-extrabold">Task rate</h3>
-        <span className="text-muted" aria-live="polite">
-          {shown ? `${shown.title}: done ${shown.done} of ${shown.total} times (${pct(shown.done, shown.total)}%)` : `How often each task was completed, ${rangeText}`}
-        </span>
+        <span className="text-muted">How often each task was done. Point at a bar for details.</span>
       </div>
       <div className="overflow-x-auto">
         <div className="relative" style={{ minWidth: rows.length * 52 }}>
@@ -586,9 +583,22 @@ function TaskRateChart({ stats, rangeText }: { stats: KidStats[]; rangeText: str
                   onPointerEnter={() => setHover(i)}
                   onPointerLeave={() => setHover(null)}
                   onClick={() => setHover(i)}
-                  aria-label={`${r.title}: ${v}%`}
-                  title={`${r.title}: ${v}%`}
+                  aria-label={`${r.title}: done ${r.done} times, ${v}%`}
                 >
+                  {hover === i && (
+                    <span
+                      role="tooltip"
+                      className={`pointer-events-none absolute z-10 whitespace-nowrap rounded-xl bg-white px-3 py-1.5 text-left text-sm shadow-lg ring-1 ring-line ${
+                        i > rows.length / 2 ? 'right-0' : 'left-0'
+                      }`}
+                      style={{ bottom: `calc(${Math.min(v, 80)}% + 26px)` }}
+                    >
+                      <span className="block font-extrabold text-ink">{r.title}</span>
+                      <span className="block text-muted">
+                        Done <b className="text-ink">{r.done}</b> {r.done === 1 ? 'time' : 'times'}
+                      </span>
+                    </span>
+                  )}
                   <span className="absolute text-sm font-extrabold tabular-nums text-ink" style={{ bottom: `calc(${v}% + 4px)` }}>
                     {v}%
                   </span>

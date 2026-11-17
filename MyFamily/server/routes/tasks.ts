@@ -365,15 +365,16 @@ tasksRouter.get(
     ]);
     if (tErr || cErr || rErr) throw tErr ?? cErr ?? rErr;
     const done = new Set((checks ?? []).map((c) => `${c.member_id}|${c.template_id}|${c.day}`));
+    const tickedDays = new Set((checks ?? []).map((c) => `${c.member_id}|${c.day}`));
 
     const result = kids.map((kid) => {
       const kidStart = toDay(new Date(kid.created_at));
       const mine = (templates as Tpl[]).filter((t) => appliesTo(t, kid.id));
-      // A task counts on a day if it was on the list then, or if it was ticked that day
-      // (a parent can tick earlier days, even before the task or kid was added).
+      // The kid's full list counts on a day (so 100% = every task, not just the ticked ones) when
+      // the task existed then, or when a parent filled in that earlier day by ticking something.
       const activeOn = (t: Tpl, day: string) =>
-        done.has(`${kid.id}|${t.id}|${day}`) ||
-        (day >= toDay(new Date(t.created_at)) && day >= kidStart && (!t.archived_at || day < toDay(new Date(t.archived_at))));
+        (!t.archived_at || day < toDay(new Date(t.archived_at))) &&
+        ((day >= toDay(new Date(t.created_at)) && day >= kidStart) || tickedDays.has(`${kid.id}|${day}`));
       const daily = (rewards as RewardRow[]).filter((r) => appliesTo(r, kid.id));
       const dailyEarned = new Map(daily.map((r) => [r.id, 0]));
 
@@ -401,11 +402,11 @@ tasksRouter.get(
           }
           perTask.set(tpl.id, s);
         }
-        // Daily rewards also need every must-do task done that day
+        // A reward needs at least its number of tasks done that day, and every must-do task done
         const mustDoDone = mine.every((tpl) => !tpl.mandatory || !activeOn(tpl, day) || done.has(`${kid.id}|${tpl.id}|${day}`));
         let reward = false;
         for (const r of daily) {
-          if (dTotal > 0 && mustDoDone && dDone >= Math.min(r.min_score!, dTotal)) {
+          if (dTotal > 0 && mustDoDone && dDone >= r.min_score!) {
             dailyEarned.set(r.id, dailyEarned.get(r.id)! + 1);
             reward = true;
           }

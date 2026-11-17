@@ -102,7 +102,8 @@ export default function KidsTasks() {
   // Next reward not reached yet, or the best one reached
   const mustDoLeft = (tasks ?? []).filter((t) => t.mandatory && !t.checked).length;
   // Rewards are per day: worked out only from the tasks of the day shown (today by default)
-  const isEarned = (r: Reward) => total > 0 && mustDoLeft === 0 && done >= Math.min(r.min_score!, total);
+  // Earned only with at least the reward's number of tasks done, plus every must-do task
+  const isEarned = (r: Reward) => total > 0 && mustDoLeft === 0 && done >= r.min_score!;
   const reached = rewards.filter(isEarned);
   const nextReward = rewards.find((r) => !isEarned(r));
   const bestReached = reached[reached.length - 1];
@@ -180,8 +181,8 @@ export default function KidsTasks() {
                 {allDone
                   ? `Amazing, ${kidName}! All done! 🎉`
                   : nextReward
-                    ? Math.min(nextReward.min_score!, total) - done > 0
-                      ? `${kidName}, ${Math.min(nextReward.min_score!, total) - done} more for ${nextReward.title}`
+                    ? nextReward.min_score! - done > 0
+                      ? `${kidName}, ${nextReward.min_score! - done} more for ${nextReward.title}`
                       : `${kidName}, finish the must-do tasks for ${nextReward.title}`
                     : `${kidName}'s tasks`}
               </span>
@@ -294,7 +295,8 @@ function RewardsDialog({
 }) {
   /** What's still missing for a reward, in plain words. */
   const missing = (r: Reward) => {
-    const more = Math.min(r.min_score!, total) - done;
+    if (r.min_score! > total) return `Needs ${r.min_score} tasks`;
+    const more = r.min_score! - done;
     if (more > 0) return `${more} more`;
     return mustDoLeft > 0 ? `${mustDoLeft} must-do left` : '';
   };

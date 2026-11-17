@@ -137,7 +137,7 @@ function MembersSettings() {
                 {m.is_admin && <span className="ml-2 rounded-full bg-violet-soft px-2 py-0.5 text-xs font-bold text-violet">Admin</span>}
               </div>
               <div className="text-muted">
-                <span className="capitalize">{m.role}</span>, born {fmtBirthday(m.birthday)}, age {m.age}
+                <span className="capitalize">{m.role}</span>, {fmtBirthday(m.birthday)}, age {m.age}
               </div>
             </div>
             <button
