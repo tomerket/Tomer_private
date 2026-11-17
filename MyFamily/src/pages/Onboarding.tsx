@@ -143,7 +143,7 @@ export default function Onboarding() {
           </Field>
           <Field label="Admin name (your name)">
             <input className="input" placeholder="e.g. Dana" value={adminName} onChange={(e) => setAdminName(e.target.value)} required />
-            <span className="mt-1 block text-sm text-muted">Family members use this to find your family when they sign in.</span>
+            <span className="mt-1 block text-sm text-muted">Family members sign in with the family name and the name of one of the parents.</span>
           </Field>
           <div>
             <span className="label">Family photo</span>
