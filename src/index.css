@@ -151,6 +151,12 @@ a:focus-visible {
   box-shadow: inset 0 0 0 3px #fff;
   transform: rotate(-10deg) scale(1);
 }
+/* Bolder "done" circle (parents tasks): solid, thick, no white inner ring */
+.stamp-bold[data-on='true'] {
+  border-width: 4px;
+  border-color: var(--color-violet-dark);
+  box-shadow: 0 2px 8px rgb(109 59 245 / 0.45);
+}
 
 @media (prefers-reduced-motion: reduce) {
   *,
