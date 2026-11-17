@@ -22,7 +22,7 @@ export default function Shopping() {
   const [newCat, setNewCat] = useState<string | null>(null); // typing a new category
   const [busy, setBusy] = useState(false);
   const categoryRef = useRef<HTMLSelectElement>(null);
-  const productRef = useRef<HTMLInputElement>(null);
+  const productRef = useRef<HTMLTextAreaElement>(null);
   const isParent = me?.member?.role === 'parent';
   const canRemove = (i: Item) => isParent || i.created_by === me?.member?.id;
 
@@ -62,9 +62,9 @@ export default function Shopping() {
   async function add(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    // "milk, eggs, bread" adds three products at once
+    // One product per line (commas work too): "Milk\nEggs\nBread" adds three products
     const names = product
-      .split(',')
+      .split(/[\n,]/)
       .map((s) => s.trim())
       .filter(Boolean);
     if (!category) return setError('Choose a category');
@@ -136,7 +136,7 @@ export default function Shopping() {
       {confirmDialog}
       <form onSubmit={add} className="mb-5 space-y-3 rounded-[28px] bg-soft p-4 sm:p-5">
         <div className="text-2xl font-extrabold">Add to the list</div>
-        <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)_auto] md:items-end">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)_auto] md:items-start">
           <div>
             <span className="label">Category *</span>
             {newCat === null ? (
@@ -181,14 +181,30 @@ export default function Shopping() {
             )}
           </div>
           <label className="block">
-            <span className="label">Product *</span>
-            <input ref={productRef} className="input" maxLength={400} placeholder="e.g. Milk, eggs, bread" value={product} onChange={(e) => setProduct(e.target.value)} />
+            <span className="label">Products *</span>
+            <textarea
+              ref={productRef}
+              className="input min-h-[110px] resize-y"
+              maxLength={1200}
+              placeholder={'One product per line, e.g.\nMilk\nEggs\nBread'}
+              value={product}
+              onChange={(e) => setProduct(e.target.value)}
+              onKeyDown={(e) => {
+                // Ctrl/Cmd + Enter adds; plain Enter starts the next line
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
+                }
+              }}
+            />
           </label>
-          <button className="btn btn-primary" disabled={busy || !category || !product.trim() || newCat !== null}>
+          <button className="btn btn-primary md:mt-7" disabled={busy || !category || !product.trim() || newCat !== null}>
             <Plus size={20} /> {busy ? 'Adding…' : 'Add'}
           </button>
         </div>
-        <p className="text-sm text-muted">Add several products at once with commas.</p>
+        <p className="text-sm text-muted">
+          {allNames.length === 0 ? 'Start with “+ New” to add your first category, e.g. Groceries.' : 'Write one product per line. Each one goes on its own line in the list.'}
+        </p>
       </form>
 
       <ErrorBox message={error} />
@@ -244,9 +260,9 @@ export default function Shopping() {
                   {col.items.length === 0 ? (
                     <p className="px-3 py-4 text-center text-muted">Nothing here yet</p>
                   ) : (
-                    <ul>
+                    <ul className="flex flex-col">
                       {col.items.map((i) => (
-                        <li key={i.id} className="flex items-center gap-2 border-t border-line px-2 py-1 first:border-t-0">
+                        <li key={i.id} className="flex w-full items-center gap-2 border-t border-line px-2 py-1 first:border-t-0">
                           <button
                             onClick={() => toggle(i)}
                             aria-pressed={i.bought}
@@ -319,7 +335,7 @@ function Columns({ count, children }: { count: number; children: React.ReactNode
       <div ref={ref} className="flex snap-x gap-4 overflow-x-auto pb-2">
         {Array.isArray(children)
           ? children.map((child, i) => (
-              <div key={i} className="w-[78%] shrink-0 snap-start sm:w-[calc((100%-1rem)/2)] lg:w-[calc((100%-3rem)/4)] xl:w-[calc((100%-4rem)/5)]">
+              <div key={i} className="w-[78%] shrink-0 snap-start sm:w-[calc((100%_-_1rem)/2)] lg:w-[calc((100%_-_3rem)/4)] xl:w-[calc((100%_-_4rem)/5)]">
                 {child}
               </div>
             ))

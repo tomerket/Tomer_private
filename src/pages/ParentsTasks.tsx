@@ -9,6 +9,7 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { ErrorBox } from '../components/ui';
 import { api, today } from '../lib/api';
 import { resizeImage } from '../lib/image';
+import { CATEGORY_COLORS } from '../lib/categories';
 import { useSession } from '../lib/session';
 
 type ParentTask = {
@@ -16,7 +17,7 @@ type ParentTask = {
   subject: string;
   text: string | null; // description
   day: string; // start date
-  due_date: string; // end date
+  due_date: string | null; // end date (null = no end date)
   done: boolean;
   done_at: string | null;
   assigned_to: string | null;
@@ -27,7 +28,7 @@ type ParentTask = {
   photoUrl: string | null;
 };
 type Filter = 'today' | 'due' | 'open' | 'done';
-type Patch = Partial<{ subject: string; description: string; done: boolean; day: string; dueDate: string; icon: string | null }>;
+type Patch = Partial<{ subject: string; description: string; done: boolean; day: string; dueDate: string | null; icon: string | null }>;
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'today', label: 'Open today' },
@@ -111,6 +112,12 @@ export default function ParentsTasks() {
   const members = me?.members ?? [];
   const parents = members.filter((m) => m.role === 'parent');
   const nameOf = (id: string | null) => members.find((p) => p.id === id)?.name;
+  // Each parent has their own color, by their fixed place in the family
+  const colorOfParent = (id: string | null) => {
+    const i = parents.findIndex((p) => p.id === id);
+    const order = [2, 3, 1, 6, 4, 0, 5, 7]; // blue, pink, green, orange… so neighbours look different
+    return i < 0 ? { bg: '#EEEAF7', fg: '#5B5873' } : CATEGORY_COLORS[order[i % order.length]];
+  };
   const todayIso = today();
 
   const [filter, setFilter] = useState<Filter>('open'); // All open by default
@@ -158,13 +165,13 @@ export default function ParentsTasks() {
     e.preventDefault();
     setError(null);
     if (!subject.trim()) return setError('Please write a subject');
-    if (!start || !end) return setError('Please choose a start date and an end date');
-    if (end < start) return setError('The end date can’t be before the start date');
+    if (!start) return setError('Please choose a start date');
+    if (end && end < start) return setError('The end date can’t be before the start date');
     if (!assignee) return setError('Choose who the task is for');
     setBusy(true);
     try {
       const { task } = await api<{ task: ParentTask }>('/parent-tasks', {
-        body: { subject, description, day: start, dueDate: end, assignedTo: assignee, icon },
+        body: { subject, description, day: start, dueDate: end || null, assignedTo: assignee, icon },
       });
       if (photo) await api(`/parent-tasks/${task.id}/photo`, { raw: photo });
       setSubject('');
@@ -219,7 +226,7 @@ export default function ParentsTasks() {
     // Today: started and not done, plus anything finished today. Due today: open tasks that end today or earlier.
     .filter((t) => {
       if (filter === 'today') return !t.done || (t.done_at && localDay(t.done_at) === todayIso);
-      if (filter === 'due') return !t.done && t.due_date <= todayIso;
+      if (filter === 'due') return !t.done && t.due_date !== null && t.due_date <= todayIso;
       if (filter === 'done') return t.done; // reopening a task takes it off this list
       return !t.done; // All open: a task ticked done leaves the list
     })
@@ -276,11 +283,11 @@ export default function ParentsTasks() {
                 <input type="date" required className="input !text-xl" value={start} onChange={(e) => setStart(e.target.value)} />
               </label>
               <label>
-                <span className="label">End date *</span>
-                <input type="date" required className="input !text-xl" value={end} min={start} onChange={(e) => setEnd(e.target.value)} />
+                <span className="label">End date</span>
+                <input type="date" className="input !text-xl" value={end} min={start} onChange={(e) => setEnd(e.target.value)} aria-describedby="end-hint" />
               </label>
               <label>
-                <span className="label">For *</span>
+                <span className="label">Assigned to *</span>
                 <select className="input !text-xl" value={assignee} onChange={(e) => setAssignee(e.target.value)} required>
                   <option value="">Choose a parent…</option>
                   {parents.map((p) => (
@@ -290,10 +297,13 @@ export default function ParentsTasks() {
                   ))}
                 </select>
               </label>
-              <button className="btn btn-primary px-8 py-4 !text-2xl" disabled={busy || !subject.trim() || !start || !end}>
+              <button className="btn btn-primary px-8 py-4 !text-2xl" disabled={busy || !subject.trim() || !start}>
                 <Plus size={22} /> {busy ? 'Adding…' : 'Add'}
               </button>
             </div>
+            <p id="end-hint" className="text-base text-muted">
+              Leave the end date empty for a task with no end date.
+            </p>
           </form>
         )}
 
@@ -312,12 +322,11 @@ export default function ParentsTasks() {
           </div>
           {parents.length > 1 && (
             <div className="flex items-center gap-2">
-              <span className="text-lg font-semibold text-muted">For</span>
               <CheckDropdown
                 ariaLabel="Show tasks for"
                 className="w-56"
                 allLabel="Everyone"
-                options={parents.map((p) => ({ id: p.id, label: p.name }))}
+                options={parents.map((p) => ({ id: p.id, label: p.name, dot: colorOfParent(p.id).fg }))}
                 selected={who}
                 onChange={setWho}
               />
@@ -353,6 +362,7 @@ export default function ParentsTasks() {
                 todayIso={todayIso}
                 canEdit={canEdit}
                 assigneeName={nameOf(t.assigned_to)}
+                assigneeColor={colorOfParent(t.assigned_to)}
                 creatorName={nameOf(t.created_by)}
                 onToggle={() => patch(t.id, { done: !t.done })}
                 onSave={(p) => patch(t.id, p)}
@@ -371,6 +381,7 @@ export default function ParentsTasks() {
 function status(task: ParentTask, todayIso: string): { text: string; cls: string } {
   if (task.done) return { text: task.done_at ? `Done ${mdy(localDay(task.done_at))}` : 'Done', cls: 'bg-success/10 text-success' };
   if (task.day > todayIso) return { text: 'Not started yet', cls: 'bg-soft text-muted' };
+  if (!task.due_date) return { text: 'In progress', cls: 'bg-violet-soft text-violet' };
   if (task.due_date < todayIso) return { text: 'Overdue', cls: 'bg-danger/10 text-danger' };
   if (task.due_date === todayIso) return { text: 'Ends today', cls: 'bg-sun-soft text-sun-ink' };
   return { text: 'In progress', cls: 'bg-violet-soft text-violet' };
@@ -381,6 +392,7 @@ function TaskItem({
   todayIso,
   canEdit,
   assigneeName,
+  assigneeColor,
   creatorName,
   onToggle,
   onSave,
@@ -391,6 +403,7 @@ function TaskItem({
   todayIso: string;
   canEdit: boolean;
   assigneeName?: string;
+  assigneeColor: { bg: string; fg: string };
   creatorName?: string;
   onToggle: () => void;
   onSave: (p: Patch) => void;
@@ -401,19 +414,22 @@ function TaskItem({
   const [subject, setSubject] = useState(task.subject);
   const [description, setDescription] = useState(task.text ?? '');
   const [start, setStart] = useState(task.day);
-  const [end, setEnd] = useState(task.due_date);
+  const [end, setEnd] = useState(task.due_date ?? '');
   const st = status(task, todayIso);
 
   function cancel() {
     setSubject(task.subject);
     setDescription(task.text ?? '');
     setStart(task.day);
-    setEnd(task.due_date);
+    setEnd(task.due_date ?? '');
     setEditing(false);
   }
 
   return (
-    <li className={`flex items-start gap-4 rounded-[20px] border-2 p-4 transition ${task.done ? 'border-line bg-soft' : 'border-line bg-white'}`}>
+    <li
+      className={`flex items-start gap-4 rounded-[20px] border-2 border-l-[8px] p-4 transition ${task.done ? 'border-line bg-soft' : 'border-line bg-white'}`}
+      style={{ borderLeftColor: assigneeColor.fg }}
+    >
       <button
         aria-label={task.done ? 'Mark as not done' : 'Mark as done'}
         disabled={!canEdit}
@@ -441,7 +457,7 @@ function TaskItem({
                 <input type="date" className="input !text-lg" value={start} onChange={(e) => setStart(e.target.value)} />
               </label>
               <label>
-                <span className="label">End date *</span>
+                <span className="label">End date (optional)</span>
                 <input type="date" className="input !text-lg" value={end} min={start} onChange={(e) => setEnd(e.target.value)} />
               </label>
             </div>
@@ -464,9 +480,9 @@ function TaskItem({
             <div className="flex gap-2">
               <button
                 className="btn btn-primary py-2"
-                disabled={!subject.trim() || !start || !end || end < start}
+                disabled={!subject.trim() || !start || (end !== '' && end < start)}
                 onClick={() => {
-                  onSave({ subject, description, day: start, dueDate: end });
+                  onSave({ subject, description, day: start, dueDate: end || null });
                   setEditing(false);
                 }}
               >
@@ -487,10 +503,10 @@ function TaskItem({
               {task.text && <p className={`mt-1 whitespace-pre-wrap break-words text-lg ${task.done ? 'text-muted' : 'text-ink'}`}>{task.text}</p>}
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-base text-muted">
                 <span className="inline-flex items-center gap-1 font-semibold text-ink">
-                  <CalendarRange size={17} /> {mdy(task.day)} to {mdy(task.due_date)}
+                  <CalendarRange size={17} /> {task.due_date ? `${mdy(task.day)} to ${mdy(task.due_date)}` : `From ${mdy(task.day)}, no end date`}
                 </span>
-                <span className="inline-flex items-center gap-1">
-                  <UserRound size={17} /> For <b className="text-ink">{assigneeName ?? 'not given to anyone yet'}</b>
+                <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-bold" style={{ background: assigneeColor.bg, color: assigneeColor.fg }}>
+                  <UserRound size={16} /> {assigneeName ?? 'Not given to anyone yet'}
                 </span>
                 <span>
                   Added by {creatorName ?? 'someone'} on {mdy(localDay(task.created_at))}

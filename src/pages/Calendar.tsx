@@ -492,6 +492,11 @@ function EventForm({
   const [time, setTime] = useState(initial?.time ?? '');
   const [remindOn, setRemindOn] = useState(initial?.remind_on ?? '');
   const [remindTime, setRemindTime] = useState(initial?.remind_time ?? '');
+  /** Picking a reminder date fills in 8:00 AM unless a time was already chosen. */
+  const chooseRemind = (v: string) => {
+    setRemindOn(v);
+    if (v && !remindTime) setRemindTime('08:00');
+  };
   const [note, setNote] = useState(initial?.note ?? '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -648,7 +653,7 @@ function EventForm({
                   key={p.label}
                   type="button"
                   aria-pressed={on}
-                  onClick={() => setRemindOn(value)}
+                  onClick={() => chooseRemind(value)}
                   className={`rounded-full px-3 py-1.5 text-sm font-bold transition ${on ? 'bg-violet text-white' : 'bg-soft text-ink hover:bg-violet-soft'}`}
                 >
                   {p.label}
@@ -659,7 +664,7 @@ function EventForm({
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="text-sm font-semibold text-muted">Reminder date</span>
-              <input type="date" className="input" value={remindOn} max={date || undefined} onChange={(e) => setRemindOn(e.target.value)} />
+              <input type="date" className="input" value={remindOn} max={date || undefined} onChange={(e) => chooseRemind(e.target.value)} />
             </label>
             <label className="block">
               <span className="text-sm font-semibold text-muted">Reminder time</span>

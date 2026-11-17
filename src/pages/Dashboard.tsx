@@ -79,7 +79,7 @@ export default function Dashboard() {
   async function removeForKid(kidId: string, taskId: number, title: string, name: string) {
     if (!(await confirm({ title: `Remove "${title}" for ${name}?`, text: "Other kids keep this task." }))) return;
     try {
-      await api(`/kids/${kidId}/tasks/${taskId}`, { method: 'DELETE' });
+      await api(`/kids/${kidId}/tasks/${taskId}?day=${today()}`, { method: 'DELETE' }); // counts until yesterday
       setReload((n) => n + 1);
     } catch (e) {
       setError((e as Error).message);
