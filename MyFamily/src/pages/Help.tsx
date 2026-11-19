@@ -165,6 +165,10 @@ const SECTIONS: Section[] = [
             <b>Share with</b>: <i>Only me</i> (the default), <i>All family</i>, or chosen people. Products still to buy show who they are
             shared with, for example <i>All Family</i> or <i>Dana, Omer</i>.
           </li>
+          <li>
+            Tap the <b>pencil</b> next to a product to fix its name or move it to another category. The person who added it can also change
+            who sees it there, for example from <i>Only me</i> to <i>All family</i>.
+          </li>
           <li>Anyone a product is shared with can tick it, change it or delete it.</li>
         </ul>
       </>
