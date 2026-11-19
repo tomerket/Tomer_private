@@ -1,4 +1,4 @@
-import { Check, ChevronLeft, ChevronRight, Plus, ShoppingCart, Trash2, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Pencil, Plus, ShoppingCart, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { AppLayout } from '../components/AppLayout';
 import { useConfirm } from '../components/ConfirmDialog';
@@ -35,6 +35,7 @@ export default function Shopping() {
   const [newCat, setNewCat] = useState<string | null>(null); // typing a new category
   const [sharedWith, setSharedWith] = useState<SharedWith>([]); // new products start as "Only me"
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<Item | null>(null); // the product being changed
   const categoryRef = useRef<HTMLSelectElement>(null);
   const productRef = useRef<HTMLTextAreaElement>(null);
   const isParent = me?.member?.role === 'parent';
@@ -149,6 +150,18 @@ export default function Shopping() {
   return (
     <AppLayout title="Shopping List" icon={<ShoppingCart className="text-violet" />}>
       {confirmDialog}
+      {editing && (
+        <EditItem
+          item={editing}
+          categories={allNames}
+          isMine={editing.created_by === me?.member?.id}
+          onClose={() => setEditing(null)}
+          onSaved={(it) => {
+            setItems((l) => l?.map((x) => (x.id === it.id ? it : x)) ?? null);
+            setEditing(null);
+          }}
+        />
+      )}
       <form onSubmit={add} className="mb-5 space-y-3 rounded-[28px] bg-soft p-4 sm:p-5">
         <div className="text-2xl font-extrabold">Add to the list</div>
         <div className="grid gap-3 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)_auto] xl:items-start">
@@ -303,11 +316,17 @@ export default function Shopping() {
                               {!i.bought && <ShareChip shared={i.shared_with} createdBy={i.created_by} className="px-1.5 text-[10px] sm:px-2 sm:text-xs" />}
                             </span>
                           </button>
-                          {canRemove(i) && (
-                            <button aria-label={`Delete ${i.name}`} title="Delete" className="shrink-0 rounded-lg p-0.5 text-muted hover:bg-soft hover:text-danger sm:p-1" onClick={() => removeOne(i)}>
-                              <Trash2 className="h-3 w-3 sm:h-[17px] sm:w-[17px]" />
+                          {/* Change and delete stacked, so the product name keeps its width */}
+                          <div className="flex shrink-0 flex-col">
+                            <button aria-label={`Change ${i.name}`} title="Change" className="shrink-0 rounded-lg p-0.5 text-muted hover:bg-soft hover:text-violet sm:p-1" onClick={() => setEditing(i)}>
+                              <Pencil className="h-3 w-3 sm:h-[17px] sm:w-[17px]" />
                             </button>
-                          )}
+                            {canRemove(i) && (
+                              <button aria-label={`Delete ${i.name}`} title="Delete" className="shrink-0 rounded-lg p-0.5 text-muted hover:bg-soft hover:text-danger sm:p-1" onClick={() => removeOne(i)}>
+                                <Trash2 className="h-3 w-3 sm:h-[17px] sm:w-[17px]" />
+                              </button>
+                            )}
+                          </div>
                         </li>
                       ))}
                     </ul>
@@ -319,6 +338,95 @@ export default function Shopping() {
         </>
       )}
     </AppLayout>
+  );
+}
+
+/** Change a product: fix its name, move it to another category, and (for the person who added it) who can see it. */
+function EditItem({ item, categories, isMine, onClose, onSaved }: { item: Item; categories: string[]; isMine: boolean; onClose: () => void; onSaved: (i: Item) => void }) {
+  const [name, setName] = useState(item.name);
+  const [category, setCategory] = useState(item.category);
+  const [sharedWith, setSharedWith] = useState<SharedWith>(item.shared_with);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const options = categories.includes(item.category) ? categories : [...categories, item.category];
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return setError('Write a product');
+    const body: Record<string, unknown> = {};
+    if (name.trim() !== item.name) body.name = name.trim();
+    if (category !== item.category) body.category = category;
+    if (isMine && JSON.stringify(sharedWith) !== JSON.stringify(item.shared_with)) body.sharedWith = sharedWith ?? 'all';
+    if (Object.keys(body).length === 0) return onClose();
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api<{ item: Item }>(`/shopping/${item.id}`, { method: 'PATCH', body });
+      onSaved(r.item);
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
+      <form
+        role="dialog"
+        aria-modal
+        aria-labelledby="edit-product-title"
+        onSubmit={save}
+        onClick={(e) => e.stopPropagation()}
+        className="panel max-h-[95dvh] w-full max-w-lg space-y-4 overflow-y-auto p-5"
+      >
+        <div className="flex items-center justify-between">
+          <h2 id="edit-product-title" className="text-2xl font-extrabold">
+            Change product
+          </h2>
+          <button type="button" aria-label="Close" className="p-1 text-muted" onClick={onClose}>
+            <X />
+          </button>
+        </div>
+        <label className="block">
+          <span className="label">Product *</span>
+          <input className="input" autoFocus maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="block">
+          <span className="label">Category</span>
+          <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
+            {options.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </label>
+        {isMine ? (
+          <SharePicker value={sharedWith} onChange={setSharedWith} />
+        ) : (
+          <div>
+            <span className="label">Share with</span>
+            <ShareChip shared={item.shared_with} createdBy={item.created_by} className="px-3 py-1 text-sm" />
+            <p className="mt-1 text-sm text-muted">Only the person who added it can change who sees it.</p>
+          </div>
+        )}
+        <ErrorBox message={error} />
+        <div className="flex justify-end gap-2">
+          <button type="button" className="btn btn-ghost" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn btn-primary" disabled={busy || !name.trim()}>
+            {busy ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
